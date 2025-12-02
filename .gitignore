@@ -1,0 +1,5 @@
+.idea
+.venv
+.*
+_*
+trie.json
