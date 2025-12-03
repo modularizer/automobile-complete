@@ -202,7 +202,7 @@ def interactive_demo(trie: Trie,
                 continue
             elif ch == '\b' or ord(ch) == 127:  # Backspace
                 # Use trie's built-in backspace handling via walk_to
-                current_node = current_node.walk_to('\b', create_nodes=False)
+                current_node = current_node.walk_to('\b')
                 continue
             elif ch == '\r' or ch == '\n':  # Regular Enter - exit
                 # Accept current completion if any
@@ -226,7 +226,7 @@ def interactive_demo(trie: Trie,
                 continue
             else:
                 # Regular character - use walk_to (same as .sim())
-                current_node = current_node.walk_to(ch, create_nodes=False)
+                current_node = current_node.walk_to(ch)
     except KeyboardInterrupt:
         if noisy:
             safe_print("\n\nExiting...")

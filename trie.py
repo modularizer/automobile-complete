@@ -14,7 +14,10 @@ with support for displaying completion suggestions in a user-friendly format.
 """
 
 import re
+import time
 from pathlib import Path
+
+FINALE_PART = re.compile(r"[A-Za-z0-9']+$")
 
 
 class CoreTrie:
@@ -41,7 +44,6 @@ class CoreTrie:
         root: Reference to the root node of the trie
         parent: Reference to the parent node
         prefix: The prefix string represented by this node
-        change: The change string accumulated during navigation
         num_accepted: Number of characters accepted from completion
         config: Configuration dictionary for trie behavior
         full_text: Full text accumulated during navigation (if caching enabled)
@@ -105,22 +107,27 @@ class CoreTrie:
             full_text: Initial full text value (used when cloning nodes).
             **config: Configuration options to override defaults.
         """
-        self.children = children or {}  # Child nodes keyed by character
+        self.children = children if children is not None else {}  # Child nodes keyed by character
         self.completion = completion  # Completion suffix for this prefix
         self.freq = 1  # Frequency/weight of this completion
-        self.counter = 0  # Global counter (only used at root)
         self.index = None  # Unique index in wordlist (if this is a word node)
-        self.words: list["CoreTrie"] = []  # List of all word nodes (only at root)
 
-        self.root = root if root is not None else self  # Reference to root node
-        self.parent = parent if parent is not None else self.root  # Parent node
+        r = root if root is not None else self  # Reference to root node
+        self.root = r
+        self.parent = parent if parent is not None else r  # Parent node
         self.prefix = prefix  # Prefix string this node represents
-        self.change = ""  # Change string accumulated during navigation
         self.num_accepted = 0  # Number of characters accepted from completion
-        # Merge default settings with provided config
-        self.config: dict = {"root": self.root, **self.default_settings, **config}
+
+        if root is not None:
+            self.config = r.config
+            self.words = r.words
+        else:
+            # Merge default settings with provided config
+            self.config: dict = {"root": r, **self.default_settings, **config}
+            self.words: list["CoreTrie"] = []  # List of all word nodes (only at root)
+            self.counter = 0
         # Cache full text only if enabled in config
-        self.full_text = full_text if self.cache_full_text else ""
+        self.full_text = full_text
 
     @property
     def cache_full_text(self) -> bool:
@@ -192,7 +199,7 @@ class CoreTrie:
         return type(self)(completion=self.completion, children=self.children, parent=parent if parent is not None else self, prefix=self.prefix, full_text=full_text if full_text is not None else self.full_text,
                           **self.config)
 
-    def walk_to(self, v: str, *, handle_control_characters: bool | None = None, create_nodes: bool = False) -> "CoreTrie":
+    def walk_to(self, v: str, *, handle_control_characters: bool | None = None) -> "CoreTrie":
         """
         Navigate through the trie by processing a sequence of characters.
         
@@ -204,8 +211,6 @@ class CoreTrie:
             v: String of characters to process (can include control characters).
             handle_control_characters: Whether to handle tab and backspace specially.
                 If None, uses the instance's configured value.
-            create_nodes: If True, creates new nodes when navigating to non-existent
-                paths. If False, only navigates existing paths.
         
         Returns:
             The node reached after processing all characters in v.
@@ -214,47 +219,39 @@ class CoreTrie:
         ci: bool = self.case_insensitive  # Case-insensitive flag
         node: "CoreTrie" = self  # Current node (starts at self)
         s: str = self.full_text  # Accumulated full text
-        change: str = ""  # Accumulated change string
         for ch in v:
             # Handle backspace character: delete last character and move to parent
-            if handle_control_characters and ch == "\b" and not create_nodes and "\b" not in node.children:
+            if handle_control_characters and ch == "\b"  and "\b" not in node.children:
 
                 s = s[:-1]  # Remove last character from full text
-                change += "\b"  # Add backspace to change string
 
-                m = re.search(r"[A-Za-z0-9']+$", s)
+                m = re.search(FINALE_PART, s)
                 prefix = m.group(0) if m else ""
                 node = node.root.clone(s).walk_to(prefix)
             # Handle tab character: accept completion and navigate to it
-            elif handle_control_characters and ch == "\t" and not create_nodes:
+            elif handle_control_characters and ch == "\t":
                 c: str = node.completion  # Get completion suffix
                 s += c  # Add completion to full text
-                change += c  # Add completion to change string
                 n: int = len(c)  # Length of accepted completion
                 # Recursively walk through the completion string
-                node = node.walk_to(c, handle_control_characters=handle_control_characters, create_nodes=create_nodes)
+                node = node.walk_to(c, handle_control_characters=handle_control_characters)
                 node.num_accepted = n  # Record how many characters were accepted
             # Handle normal characters
             else:
                 s += ch  # Add character to full text
-                change += ch  # Add character to change string
                 # Look up child node (case-insensitive if enabled)
                 n = node.children.get(ch.lower() if ci else ch)
                 if n is None:
                     # Create new child node if it doesn't exist
                     n = node.child(ch)
-                    if create_nodes:
-                        # Store child in children dict if creating nodes
-                        node.children[ch] = n
                 node = n  # Move to child node
 
             # Reset to root if we hit an empty node and a reset character
             # (Reset characters are non-alphabetic, non-control characters like space, punctuation)
-            if (not create_nodes) and node.is_empty() and self.is_reset_char(ch):
+            if node.is_empty() and self.is_reset_char(ch):
                 node = node.root.clone(s, parent=node)
-            # Update node's full text and change strings
-            node.full_text = s
-            node.change = change
+            # Update node's full text
+        node.full_text = s
         return node
 
     def is_alpha(self, ch: str) -> bool:
@@ -299,56 +296,67 @@ class CoreTrie:
         """
         return not self.is_alpha(ch) and not self.is_control_character(ch)
 
-    def insert(self, *lines: str) -> "CoreTrie":
-        """
-        Insert words into the trie from formatted lines.
-        
-        Parses lines in the format "prefix|completion #frequency" or "prefix|completion"
-        and inserts them into the trie. Lines can be separated by newlines or passed
-        as separate arguments.
-        
-        Args:
-            *lines: Variable number of string lines containing word definitions.
-                Format: "prefix|completion #frequency" or "prefix|completion".
-                Lines can contain newlines and will be split.
-        
-        Returns:
-            Self for method chaining.
-        """
-        lines: list[str] = [line for line in [line.strip() for line in "\n".join(lines).split("\n")] if line]
-        for line in lines:
-            # Parse line format: "prefix|completion #frequency" or "prefix|completion"
-            match_groups: list[str] = re.match(r"^([^|]+)\|([^#]+)( #(\d+))?$", line).groups()
-            pre: str = match_groups[0]  # Prefix part
-            post: str = match_groups[1]  # Completion part
-            freq_str: str = match_groups[3]  # Frequency string (may be None)
-            freq: int = int(freq_str) if freq_str else 1  # Parse frequency or default to 1
+    def insert(self, text: str) -> "CoreTrie":
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Split frequency: "... #123"
+            freq = 1
+            if " #" in line:
+                line, freq_str = line.rsplit(" #", 1)
+                freq = int(freq_str)
+
+            # Split prefix|completion
+            pre, post = line.split("|", 1)
             self.insert_pair(pre, post, freq)
+
         return self
 
+
     def insert_pair(self, pre: str, post: str, freq: int = 1) -> None:
-        """
-        Insert a single prefix-completion pair into the trie.
-        
-        Navigates to the prefix node (creating nodes as needed), sets the completion
-        and frequency, then creates nodes for each character in the completion string
-        with appropriate partial completions.
-        
-        Args:
-            pre: Prefix string to navigate to.
-            post: Completion suffix to store at the prefix node.
-            freq: Frequency/weight of this completion. Defaults to 1.
-        """
-        node: "CoreTrie" = self.walk_to(pre, create_nodes=True)  # Navigate to prefix node
-        node.completion = post  # Set completion suffix
-        node.freq = freq  # Set frequency
-        self.root.counter += 1  # Increment global counter
-        node.index = self.root.counter  # Assign unique index
-        self.root.words.append(node)  # Add to word list
-        # Create nodes for each character in completion with partial completions
+        node = self
+        root = self.root
+        T = type(self)
+        ci = self.case_insensitive
+        pre = pre.lower() if ci else pre
+        post = post.lower() if ci else post
+
+        for ch in pre:
+            child = node.children.get(ch)
+            if child is None:
+                # very lightweight child creation, see #2
+                child = T(
+                    completion="",
+                    children={},
+                    root=root,
+                    parent=node,
+                    prefix=node.prefix + ch,
+                )
+                node.children[ch] = child
+            node = child
+        node.completion = post
+        node.freq = freq
+        self.counter += 1
+        node.index = self.counter
+        self.words.append(node)
+
+        # Build completion chain (again with the simple builder)
         for i, ch in enumerate(post[:-1]):
-            node = node.walk_to(ch, create_nodes=True)
-            node.completion = post[i+1:]  # Store remaining completion
+            child = node.children.get(ch)
+            if child is None:
+                # very lightweight child creation, see #2
+                child = T(
+                    completion="",
+                    children={},
+                    root=root,
+                    parent=node,
+                    prefix=node.prefix + ch,
+                )
+                node.children[ch] = child
+            node = child
+            node.completion = post[i + 1:]
 
     def accept(self) -> "CoreTrie":
         """
