@@ -150,16 +150,16 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False):
             # 1. Print line WITH completion (moves cursor to end of completion)
             # 2. Print line WITHOUT completion (moves cursor back to end of text, but gray text remains)
             if completion:
-                # Step 1: Print with completion
+                # Clear line first to remove any old characters
                 formatted_with = format_with_completion(full_text, completion)
-                print(f"\r{formatted_with}", end="", flush=True)
+                print(f"\r\033[K{formatted_with}", end="", flush=True)
                 # Step 2: Print without completion (don't clear - gray text stays visible)
                 formatted_without = format_text_only(full_text)
                 print(f"\r{formatted_without}", end="", flush=True)
             else:
                 # No completion, just print the text
                 formatted = format_text_only(full_text)
-                print(f"\r{formatted}", end="", flush=True)
+                print(f"\r\033[K{formatted}", end="", flush=True)
             
             # Read a character
             ch = get_char()
@@ -183,7 +183,7 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False):
                     # Show just the accepted text in normal color (no completion)
                     full_text = current_node.full_text or ""
                     formatted = format_text_only(full_text)
-                    print(f"\r{formatted}", end="", flush=True)
+                    print(f"\r\033[K{formatted}", end="", flush=True)
                 continue
             elif ch == '\b' or ord(ch) == 127:  # Backspace
                 # Use trie's built-in backspace handling via walk_to
