@@ -10,7 +10,7 @@ class CoreTrie:
         inst = cls(case_insensitive=case_insensitive, root=root, cache_full_text=cache_full_text)
         return inst.insert(*words)
 
-    __slots__ = ("children", "case_insensitive", "completion", "root", "parent", "prefix", "use_terminal_colors", "config", "full_text", "cache_full_text", "change")
+    __slots__ = ("children", "case_insensitive", "completion", "root", "parent", "prefix", "use_terminal_colors", "config", "full_text", "cache_full_text", "change", "num_accepted")
 
     def __init__(self, *,
                  completion: str = "",
