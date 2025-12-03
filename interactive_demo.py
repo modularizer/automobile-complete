@@ -13,6 +13,7 @@ Features:
 import argparse
 import sys
 import termios
+import time
 import tty
 from typing import Literal, Any
 
@@ -20,6 +21,7 @@ from trie import Trie
 
 RESET = "\033[0m"
 GRAY = "\033[90m"  # Light gray for completion
+REPLACE_LINE = "\r\033[K"
 
 
 def get_char():
@@ -99,8 +101,10 @@ def format_text_only(text: str) -> str:
     return text.replace("\t", "").replace("\b", "")
 
 
-def interactive_demo(trie: Trie | None = None, noisy: bool = False,
+def interactive_demo(trie: Trie,
+                     noisy: bool = False,
                      display_stream: Literal["stderr", "stdout", "/dev/tty"] | Any = "/dev/tty",
+                     placeholder: str = "Start typing to test the auto-complete...",
                      print = print,
                      get_char = get_char,
                      ):
@@ -127,26 +131,7 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False,
     # Helper function to safely print to display stream
     def safe_print(*args, **kwargs):
         print(*args, file=display_stream, **kwargs)
-    
-    # Create or use provided trie
-    if trie is None:
-        trie = Trie.from_words("""
-        anim|als
-        enor|mous
-        for e|xample:
-        gir|affes
-        giraffes a|re super tall
-        hip|po
-        hippo|potamuses
-        hippos a|re fat
-        hippopotamuses a|re fat
-        automa|tic
-        automa|tion
-        compu|ter
-        compu|tation
-        progra|mming
-        progra|mmer
-        """, cache_full_text=True)
+
 
     if noisy:
         safe_print("Interactive Autocomplete Demo")
@@ -161,10 +146,8 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False,
     
     # Initialize state - start at root
     current_node = trie
-    full_text = ""
-    completion = ""
     has_typed = False
-    safe_print(f"{GRAY}Start typing to test the auto-complete...{RESET}", end="\r")
+    safe_print(f"{GRAY}{placeholder}{RESET}" if placeholder else "", end="\r")
     
     try:
         while True:
@@ -181,14 +164,14 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False,
                 # Clear line first to remove any old characters
                 formatted_with = format_with_completion(full_text, completion)
 
-                safe_print(f"\r\033[K{formatted_with}", end="", flush=True)
+                safe_print(f"{REPLACE_LINE}{formatted_with}", end="", flush=True)
                 # Step 2: Print without completion (don't clear - gray text stays visible)
                 formatted_without = format_text_only(full_text)
                 safe_print(f"\r{formatted_without}", end="", flush=True)
             elif has_typed:
                 # No completion, just print the text
                 formatted = format_text_only(full_text)
-                safe_print(f"\r\033[K{formatted}", end="", flush=True)
+                safe_print(f"{REPLACE_LINE}{formatted}", end="", flush=True)
             # Read a character
             ch = get_char()
 
@@ -215,7 +198,7 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False,
                     # Show just the accepted text in normal color (no completion)
                     full_text = current_node.full_text or ""
                     formatted = format_text_only(full_text)
-                    safe_print(f"\r\033[K{formatted}", end="", flush=True)
+                    safe_print(f"{REPLACE_LINE}{formatted}", end="", flush=True)
                 continue
             elif ch == '\b' or ord(ch) == 127:  # Backspace
                 # Use trie's built-in backspace handling via walk_to
@@ -227,7 +210,7 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False,
                     current_node = current_node.accept()
                     full_text = current_node.full_text or ""
                 # Clear line, print final text to display stream, then newline before exiting
-                safe_print(f"\r\033[K{full_text}")  # Clear to end, print text, newline
+                safe_print(f"{REPLACE_LINE}{full_text}")  # Clear to end, print text, newline
                 break
             elif ch.startswith('\033') and ('13;2' in ch or 'OM' in ch):  # Shift+Enter (escape sequence)
                 # Shift+Enter detected - insert newline instead of exiting
@@ -237,7 +220,7 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False,
                     current_node = current_node.accept()
                     full_text = current_node.full_text or ""
                 # Clear line and print final text, then newline
-                safe_print(f"\r\033[K{full_text}")  # Clear to end, print text, newline
+                safe_print(f"{REPLACE_LINE}{full_text}")  # Clear to end, print text, newline
                 # Reset to root for new line
                 current_node = trie
                 continue
@@ -297,7 +280,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run with demo trie
+  # Run with out.txt
   python interactive_demo.py
 
   # Run with custom word file
@@ -312,8 +295,8 @@ Examples:
         "word_file",
         type=str,
         nargs="?",
-        default=None,
-        help="Path to word file to load (created by preprocess.py). If not provided, uses demo trie."
+        default="out.txt",
+        help="Path to word file to load (created by preprocess.py). If not provided, uses out.txt."
     )
     
     parser.add_argument(
@@ -330,22 +313,16 @@ Examples:
     noisy_stream = sys.stderr if is_piped else sys.stdout
     
     # Load trie from file or use demo
-    if args.word_file:
-        if args.noisy:
-            print(f"Loading trie from: {args.word_file}", file=noisy_stream)
-        try:
-            trie = Trie.from_file(args.word_file)
-            if args.noisy:
-                print(f"Loaded trie with {len(trie.root.words)} words\n", file=noisy_stream)
-            interactive_demo(trie, noisy=args.noisy)
-        except Exception as e:
-            print(f"Error loading trie: {e}", file=noisy_stream)
-            if args.noisy:
-                print("Falling back to demo trie...\n", file=noisy_stream)
-            interactive_demo(noisy=args.noisy)
-    else:
-        # Use demo trie
-        interactive_demo(noisy=args.noisy)
+    if args.noisy:
+        print(f"Loading trie from: {args.word_file}", file=noisy_stream)
+
+    t0 = time.perf_counter()
+    trie = Trie.from_file(args.word_file)
+    t1 = time.perf_counter()
+    if args.noisy:
+        print(f"Loaded trie with {len(trie.root.words)} words in {(t1 - t0):.3f}s\n", file=noisy_stream)
+    interactive_demo(trie, noisy=args.noisy)
+
 
 
 if __name__ == "__main__":
