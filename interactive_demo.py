@@ -14,18 +14,12 @@ import argparse
 import sys
 import termios
 import tty
+from typing import Literal, Any
+
 from trie import Trie
 
 RESET = "\033[0m"
 GRAY = "\033[90m"  # Light gray for completion
-    
-def close(self):
-    if not self._closed:
-        try:
-            self.stream.close()
-        except BrokenPipeError:
-            pass
-        self._closed = True
 
 
 def get_char():
@@ -105,7 +99,11 @@ def format_text_only(text: str) -> str:
     return text.replace("\t", "").replace("\b", "")
 
 
-def interactive_demo(trie: Trie | None = None, noisy: bool = False):
+def interactive_demo(trie: Trie | None = None, noisy: bool = False,
+                     display_stream: Literal["stderr", "stdout", "/dev/tty"] | Any = "/dev/tty",
+                     print = print,
+                     get_char = get_char,
+                     ):
     """
     Run an interactive autocomplete demo.
     
@@ -121,9 +119,10 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False):
     # Detect if stdout is being piped
     is_piped = not sys.stdout.isatty()
 
-    # When piped, use stderr for intermediate display, stdout for final result
-    # When not piped, use stdout for everything
-    display_stream = sys.stderr
+    # Use /dev/tty (controlling terminal) for intermediate display if available,
+    # otherwise fall back to stderr. This ensures display works even when stdout is piped.
+    display_stream_opened = False
+    display_stream = open('/dev/tty', 'w') if display_stream == "/dev/tty" else sys.stderr if display_stream == "stderr" else sys.stdout if display_stream == "stdout" else display_stream
 
     # Helper function to safely print to display stream
     def safe_print(*args, **kwargs):
@@ -275,6 +274,12 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False):
                     sys.stderr.close()
                 except (BrokenPipeError, OSError):
                     pass
+        # Close display stream if we opened /dev/tty
+        if display_stream_opened:
+            try:
+                display_stream.close()
+            except (BrokenPipeError, OSError):
+                pass
         return final_text
 
 
