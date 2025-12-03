@@ -52,6 +52,7 @@ def format_with_completion(text: str, completion: str) -> str:
     # ANSI color codes
     RESET = "\033[0m"
     GRAY = "\033[90m"  # Light gray for completion
+    CLEAR_EOL = "\033[K"  # Clear from cursor to end of line
     
     # Clean text (remove control characters for display)
     display_text = text.replace("\t", "").replace("\b", "")
@@ -62,8 +63,8 @@ def format_with_completion(text: str, completion: str) -> str:
     else:
         formatted_completion = ""
     
-    # Simple: typed text + gray completion (no cursor)
-    return f"{display_text}{formatted_completion}"
+    # Simple: typed text + gray completion + clear to end of line
+    return f"{display_text}{formatted_completion}{CLEAR_EOL}"
 
 
 def interactive_demo(trie: Trie | None = None, noisy: bool = False):
@@ -140,9 +141,11 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False):
                 if completion:
                     # Accept the completion (same as .sim())
                     current_node = current_node.accept()
-                    # Clear and redraw
+                    # Get updated state and redraw
                     full_text = current_node.full_text or ""
-                    print(f"\r{' ' * 150}\r{full_text}█", end="", flush=True)
+                    completion = current_node.completion or ""
+                    formatted = format_with_completion(full_text, completion)
+                    print(f"\r{formatted}", end="", flush=True)
                 continue
             elif ch == '\b' or ord(ch) == 127:  # Backspace
                 # Use trie's built-in backspace handling via walk_to
@@ -153,7 +156,8 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False):
                 if completion:
                     current_node = current_node.accept()
                     full_text = current_node.full_text or ""
-                print(f"\r{' ' * 150}\r{full_text}")
+                # Clear line and print final text, then newline
+                print(f"\r\033[K{full_text}")  # Clear to end, print text, newline
                 # Reset to root for new line
                 current_node = trie
                 continue
