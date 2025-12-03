@@ -15,20 +15,24 @@ def get_words(
     max_words: int | None = None,
     min_length: int  = 2,
     custom_words: dict[str, int] | list[str] | None = None,
-    custom_words_anchor: int = 200,
-) -> Words:
+    custom_words_anchor_place: int | None = None,
+    custom_words_anchor_freq: int | None = None,
+) -> tuple[Words, float]:
     """Get an alphabetically sorted lisit of words and their frequencies."""
     if not lang:
         words_by_freq = []
         word_occurences = []
-        anchor_freq = 1
+        anchor_freq = custom_words_anchor_freq or 1
     else:
         words_by_freq = [w for w in iter_wordlist(lang) if re.match(pattern, w) and len(w) >= min_length]
-
-        custom_words_anchor = max(-len(words_by_freq), min(len(words_by_freq), custom_words_anchor))
-
-        anchor_freq = 10 ** zipf_frequency(words_by_freq[custom_words_anchor], lang) + 0.1
         word_occurences = [10 ** zipf_frequency(k, lang) for k in words_by_freq]
+
+        if custom_words_anchor_freq is not None:
+            anchor_freq = custom_words_anchor_freq
+        else:
+            custom_words_anchor = max(-len(words_by_freq), min(len(words_by_freq), custom_words_anchor_place))
+            anchor_freq = 10 ** zipf_frequency(words_by_freq[custom_words_anchor], lang) + 0.1
+
 
     cw = {cw: anchor_freq for cw in custom_words} if isinstance(custom_words, list) else {w: v*anchor_freq for w, v in custom_words.items()}
     cw = {w: v for w, v in cw.items() if w not in words_by_freq}
@@ -38,12 +42,12 @@ def get_words(
     all_freqs = word_occurences + list(cw.values())
     z = zip(all_words, all_freqs)
     z = list(sorted(z, key= lambda x: x[1], reverse=True))[:max_words]
-    return z
+    return z, anchor_freq
 
 
 class Node:
-    def __init__(self, word_list: list[str], prefix: str):
-        self.word_list = word_list
+    def __init__(self, words: list[tuple[str, float]], prefix: str, anchor_freq: int = 1,):
+        self.words = words
         self.prefix: str = prefix
         self.children: dict[str, Node] = {}
 
@@ -71,21 +75,23 @@ class Node:
         self.auto_suffix: str | None = None
         self.has_auto: bool | None = None
 
+        self.anchor_freq = anchor_freq
+
     @property
     def is_word(self) -> bool:
         return self.word_id is not None
 
     @property
     def auto_word(self) -> str | None:
-        return  self.word_list[self.auto_word_id] if self.auto_word_id is not None else None
+        return  self.words[self.auto_word_id][0] if self.auto_word_id is not None else None
 
     @property
     def best_word_subtree(self) -> str | None:
-        return self.word_list[self.best_word_subtree_id] if self.best_word_subtree_id is not None else None
+        return self.words[self.best_word_subtree_id][0] if self.best_word_subtree_id is not None else None
 
     @property
     def best_word(self) -> str | None:
-        return self.word_list[self.best_word_id] if self.best_word_id is not None else None
+        return self.words[self.best_word_id][0] if self.best_word_id is not None else None
 
     def get_all_words(self, words: list | None = None) -> list[str]:
         words = words or []
@@ -192,17 +198,19 @@ class Node:
 
 def build_trie(
     words: Words,
+    anchor_freq: float = 1,
 ) -> Node:
     word_list = [w for (w,f) in words]
-    root = Node(word_list=word_list, prefix = "")  # list of (word, freq)
-    freqs_list = [f for (w,f) in words]
+    freq_list = [f for (w,f) in words]
+    root = Node(words=words, prefix = "", anchor_freq=anchor_freq)  # list of (word, freq)
+
     for i, w in enumerate(word_list):
-        f = freqs_list[i]
+        f = freq_list[i]
         node = root
         # here we build the graph/tree down to the node, letter by letter
         for char in w:
             # this basically is the same as "get node.children[char] if exists, otherwise set node.children[char] = Node() then return node.children[char]"
-            node = node.children.setdefault(char, Node(word_list=word_list, prefix=node.prefix + char))
+            node = node.children.setdefault(char, Node(words=words, prefix=node.prefix + char, anchor_freq=anchor_freq))
         node.word_id = i
         node.word_freq = f
     return root
@@ -364,11 +372,15 @@ def get_autocomplete_trie(
     min_suffix_len: int = 2,
         min_prefix_len: int = 2,
     prune: bool = False,
-custom_words: dict[str, int] | list[str] | None = None,
-    custom_words_anchor: int = 200,
+    custom_words: dict[str, int] | list[str] | None = None,
+        custom_words_anchor_place: int | None = None,
+        custom_words_anchor_freq: int | None = None,
 ) -> Node:
-    words = get_words(lang, pattern, max_words, min_length = min_suffix_len + 1, custom_words = custom_words, custom_words_anchor = custom_words_anchor)
-    tree = build_trie(words)
+    words, anchor_freq = get_words(lang, pattern, max_words, min_length = min_suffix_len + 1,
+                                   custom_words = custom_words,
+                                   custom_words_anchor_place=custom_words_anchor_place,
+                                   custom_words_anchor_freq = custom_words_anchor_freq)
+    tree = build_trie(words, anchor_freq)
     word_list = [w for (w, _) in words]
     dfs(word_list, tree, 1,
         word_threshold=word_threshold,
@@ -380,7 +392,6 @@ custom_words: dict[str, int] | list[str] | None = None,
         )
     if prune:
         prune_tree(tree)
-    j = build_json(tree)
     return tree
 
 
@@ -394,11 +405,12 @@ def parse_custom_words(src: str | Path):
     cw = {}
     m = {}
     for line in lines:
-        if re.match(r"^.*,\d+", line):
-            v, f = line.rsplit(",",maxsplit = 1)
+        # if the line has no pipe, we use the word and thre freq
+        if re.match(r"^.* #\d+", line):
+            v, f = line.rsplit(" #",maxsplit = 1)
             cw[v] = int(f)
-        elif re.match(r"^.+\|.+", line):
-            pre, post = line.rsplit("|",maxsplit = 1)
+        elif re.match(r"^.+\|.+\s?#?\d*", line):
+            pre, post = line.rsplit(" #",maxsplit = 1)[0].rsplit("|",maxsplit = 1)
             m[pre] = post
         else:
             cw[line] = 1
@@ -418,7 +430,8 @@ def write_trie(
     min_prefix_len: int = 2,
     min_suffix_len: int = 2,
     custom_words: str | Path | dict[str, int] | list[str] | None = None,
-    custom_words_anchor: int = 200,
+        custom_words_anchor_place: int | None = None,
+        custom_words_anchor_freq: int | None = None,
         indent: int = 2,
 ):
     dst = Path(dst or f"trie.json")
@@ -436,11 +449,19 @@ def write_trie(
         "min_suffix_len": min_suffix_len,
         "min_prefix_len": min_prefix_len,
         "custom_words": custom_words,
-        "custom_words_anchor": custom_words_anchor,
+        "custom_words_anchor_place": custom_words_anchor_place,
+        "custom_words_anchor_freq": custom_words_anchor_freq,
     }
     tree = get_autocomplete_trie(**params)
-    m = dict(sorted(list(build_map(tree).items()) + list(custom_map.items())))
-    words = [f"{k}|{v}" for k, v in m.items()]
+    m = {**custom_map, **build_map(tree)}
+    wf = {**dict(tree.words), **{(k+v): tree.anchor_freq for k, v in custom_map.items()} }
+    z = []
+    for k, v in m.items():
+        w = k + v
+        f = wf[w]
+        z.append((f"{k}|{v} #{round(f)}", f))
+    words = [w for w, _ in sorted(z, key=lambda x: x[1], reverse=True)]
+
     if dst is not None:
         dst.parent.mkdir(parents=True, exist_ok=True)
         if dst.suffix == ".json":
@@ -460,7 +481,7 @@ def write_trie(
             s = json.dumps(words, indent=indent)
             dst.write_text(f"params = {p}\n\nwords = {s}\n\n")
         elif dst.suffix == ".txt":
-            s = "\n".join(f"{k}|{v}" for k, v in m.items())
+            s = "\n".join(w for w in words)
             dst.write_text(s)
         elif dst.suffix == ".dart":
             p = json.dumps(params, indent=indent)
@@ -526,6 +547,6 @@ if __name__ == "__main__":
         min_suffix_len=2,
         max_words=100_000,
         custom_words="custom.txt",
-        custom_words_anchor=200,
+        custom_words_anchor_place=200,
         dst="out.txt"
     )
