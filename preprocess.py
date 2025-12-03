@@ -521,6 +521,20 @@ class Node:
         """
         print(self.build_show_str(n, word_threshold=word_threshold, sum_threshold=sum_threshold, word_ratio_threshold=word_ratio_threshold, sum_ratio_threshold=sum_ratio_threshold, sort_by=sort_by))
 
+    def disable(self, pre: str, post: str):
+        # disable completions for a word
+        node = self[pre]
+        if node is None:
+            return
+        if node.auto_suffix:
+            node.auto_suffix = None
+        for ch in post:
+            node = node[ch]
+            if node is None:
+                break
+            if node.auto_suffix:
+                node.auto_suffix = None
+
 
 def build_trie(
     words: Words,
@@ -763,8 +777,9 @@ def build_map(node: Node, map: dict[Word, list[Prefix, Completion]] | None = Non
         w: Word = node.prefix + node.auto_suffix  # Complete word
         if w not in map:
             map[w] = [node.prefix, node.auto_suffix]
-    for child in node.children.values():
-        build_map(child, map, False)
+    elif node.has_auto:
+        for child in node.children.values():
+            build_map(child, map, False)
     return dict(sorted(map.values())) if calc else None
 
 
@@ -903,7 +918,7 @@ def write_trie(
     
     Args:
         dst: Destination file path. Format determined by file extension.
-            If None, defaults to "trie.json".
+            If None, defaults to "out.txt".
         word_threshold: Minimum probability threshold for word completion.
         subtree_threshold: Minimum probability threshold for subtree completion.
         word_ratio_threshold: The selected option must be this many times better than the other options.
@@ -930,7 +945,7 @@ def write_trie(
         NotImplementedError: If file extension is not supported.
     """
     t0 = time.perf_counter()
-    dst: Path = Path(dst or f"trie.json")
+    dst: Path = Path(dst or f"out.txt")
     if isinstance(custom_words, str | Path):
         custom_words, custom_map = parse_custom_words(custom_words)
     else:
@@ -950,6 +965,12 @@ def write_trie(
         "custom_words_anchor_freq": custom_words_anchor_freq,
     }
     tree: Node = get_autocomplete_trie(**params)
+
+    # hack: disable the tree at each node from custom_map
+    # what this does is basically if we have a custom mapping of "ap|plication" it makes sure to remove "app|le" from the original list so we arent competing
+    for pre, post in custom_map.items():
+        tree.disable(pre, post)
+
     m: dict[Word, list[Prefix, Completion]] = {**custom_map, **build_map(tree)}  # Word to [prefix, completion] mapping
     wf: dict[Word, Freq] = {**dict(tree.words), **{(k+v): tree.anchor_freq for k, v in custom_map.items()}}  # Word to frequency mapping
     z: list[tuple[str, Freq]] = []  # List of (formatted_string, frequency) tuples
@@ -1063,14 +1084,14 @@ def main():
         epilog="""
 Examples:
   # Build a basic English trie and save as JSON
-  python preprocess.py --output trie.json
+  python preprocess.py --output out.txt
 
   # Build with custom words and thresholds
-  python preprocess.py --output trie.json --custom-words custom.txt \\
+  python preprocess.py --output out.txt --custom-words custom.txt \\
       --word-threshold 0.25 --subtree-threshold 0.5
 
   # Build for a different language
-  python preprocess.py --output trie.json --lang es --max-words 50000
+  python preprocess.py --output out.txt --lang es --max-words 50000
 
   # Export as TypeScript
   python preprocess.py --output trie.ts --lang en
@@ -1081,8 +1102,8 @@ Examples:
     parser.add_argument(
         "-o", "--output", "--dst",
         type=str,
-        default="trie.json",
-        help="Output file path. Format determined by extension (.json, .js, .ts, .py, .txt, .dart, .swift, .kt, .go, .rs). Default: trie.json"
+        default="out.txt",
+        help="Output file path. Format determined by extension (.json, .js, .ts, .py, .txt, .dart, .swift, .kt, .go, .rs). Default: out.txt"
     )
     
     # Language and word filtering
@@ -1118,7 +1139,7 @@ Examples:
     parser.add_argument(
         "--subtree-threshold",
         type=float,
-        default=0.5,
+        default=0.4,
         help="Minimum probability threshold (0.0-1.0) for a subtree to be considered. Default: 0.5"
     )
 
@@ -1132,15 +1153,15 @@ Examples:
     parser.add_argument(
         "--subtree-ratio-threshold",
         type=float,
-        default=3.0,
-        help="The selected completion must be this many times more likely than any alternative. Default: 3.0"
+        default=1.5,
+        help="The selected completion must be this many times more likely than any alternative. Default: 1.5"
     )
     
     # Length constraints
     parser.add_argument(
         "--min-prefix-len",
         type=int,
-        default=2,
+        default=1,
         help="Minimum length of prefix before auto-completion is allowed. Default: 2"
     )
     
@@ -1155,7 +1176,7 @@ Examples:
     parser.add_argument(
         "-c", "--custom-words",
         type=str,
-        default=None,
+        default="custom.txt" if Path("custom.txt").exists() else None,
         help="Path to custom words file (text or JSON). Text format: 'word #frequency' or 'prefix|completion'"
     )
     

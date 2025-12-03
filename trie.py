@@ -14,6 +14,7 @@ with support for displaying completion suggestions in a user-friendly format.
 """
 
 import re
+from pathlib import Path
 
 
 class CoreTrie:
@@ -50,6 +51,11 @@ class CoreTrie:
         "cache_full_text": True,  # Cache full text during navigation
         "handle_control_characters": True,  # Handle tab and backspace characters
     }
+
+    @classmethod
+    def from_file(cls, src: str | Path):
+        src = Path(src)
+        return cls.from_words(src.read_text())
 
     @classmethod
     def from_words(cls, *lines: str, root: "CoreTrie" = None, **config) -> "CoreTrie":
@@ -212,25 +218,13 @@ class CoreTrie:
         for ch in v:
             # Handle backspace character: delete last character and move to parent
             if handle_control_characters and ch == "\b" and not create_nodes and "\b" not in node.children:
-                pch: str = node.parent.change  # Parent's change string
-                normal: bool = self.is_alpha(pch)  # Check if parent change is alphabetic
 
                 s = s[:-1]  # Remove last character from full text
                 change += "\b"  # Add backspace to change string
-                if normal:
-                    # Normal case: move to parent node
-                    node = node.parent.clone()
-                elif len(pch) > 1 and self.is_alpha(pch[-1]):
-                    # Complex case: handle partial deletion
-                    # FIXME: This logic may need refinement
-                    par: "CoreTrie" = node.parent.clone()
-                    node = par.clone()
-                    par.change = pch[:-1]  # Remove last character from parent's change
-                    node.parent = node
-                else:
-                    # Fallback: reset to root with current full text
-                    # FIXME: This logic may need refinement
-                    node = node.root.clone(s, parent=node)
+
+                m = re.search(r"[A-Za-z0-9']+$", s)
+                prefix = m.group(0) if m else ""
+                node = node.root.clone(s).walk_to(prefix)
             # Handle tab character: accept completion and navigate to it
             elif handle_control_characters and ch == "\t" and not create_nodes:
                 c: str = node.completion  # Get completion suffix
@@ -324,7 +318,7 @@ class CoreTrie:
         lines: list[str] = [line for line in [line.strip() for line in "\n".join(lines).split("\n")] if line]
         for line in lines:
             # Parse line format: "prefix|completion #frequency" or "prefix|completion"
-            match_groups: list[str] = re.match(r"^(.+)\|(.+)( #(\d+))?", line).groups()
+            match_groups: list[str] = re.match(r"^([^|]+)\|([^#]+)( #(\d+))?$", line).groups()
             pre: str = match_groups[0]  # Prefix part
             post: str = match_groups[1]  # Completion part
             freq_str: str = match_groups[3]  # Frequency string (may be None)
