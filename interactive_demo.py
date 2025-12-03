@@ -16,6 +16,17 @@ import termios
 import tty
 from trie import Trie
 
+RESET = "\033[0m"
+GRAY = "\033[90m"  # Light gray for completion
+    
+def close(self):
+    if not self._closed:
+        try:
+            self.stream.close()
+        except BrokenPipeError:
+            pass
+        self._closed = True
+
 
 def get_char():
     """
@@ -65,8 +76,7 @@ def format_with_completion(text: str, completion: str) -> str:
         Formatted string with ANSI codes (text + gray completion)
     """
     # ANSI color codes
-    RESET = "\033[0m"
-    GRAY = "\033[90m"  # Light gray for completion
+
     
     # Clean text (remove control characters for display)
     display_text = text.replace("\t", "").replace("\b", "")
@@ -102,9 +112,23 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False):
     Shows completions in light gray after the cursor as you type.
     Tab accepts completions, Backspace deletes, Ctrl+C exits.
     
+    When stdout is piped, intermediate states are written to stderr,
+    and only the final text is written to stdout.
+    
     Args:
         trie: Optional Trie to use. If None, creates a demo trie.
     """
+    # Detect if stdout is being piped
+    is_piped = not sys.stdout.isatty()
+
+    # When piped, use stderr for intermediate display, stdout for final result
+    # When not piped, use stdout for everything
+    display_stream = sys.stderr
+
+    # Helper function to safely print to display stream
+    def safe_print(*args, **kwargs):
+        print(*args, file=display_stream, **kwargs)
+    
     # Create or use provided trie
     if trie is None:
         trie = Trie.from_words("""
@@ -126,55 +150,64 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False):
         """, cache_full_text=True)
 
     if noisy:
-        print("Interactive Autocomplete Demo")
-        print("=" * 50)
-        print("Features:")
-        print("  - Completions show in light gray after cursor")
-        print("  - Press Tab to accept the completion")
-        print("  - Press Backspace to delete")
-        print("  - Press Ctrl+C to exit")
-        print("=" * 50)
-        print()
+        safe_print("Interactive Autocomplete Demo")
+        safe_print("=" * 50)
+        safe_print("Features:")
+        safe_print("  - Completions show in light gray after cursor")
+        safe_print("  - Press Tab to accept the completion")
+        safe_print("  - Press Backspace to delete")
+        safe_print("  - Press Ctrl+C to exit")
+        safe_print("=" * 50)
+        safe_print()
     
     # Initialize state - start at root
     current_node = trie
-    full_text = current_node.full_text or ""
+    full_text = ""
+    completion = ""
+    has_typed = False
+    safe_print(f"{GRAY}Start typing to test the auto-complete...{RESET}", end="\r")
     
     try:
         while True:
             # Get current state from trie (it tracks full_text internally)
             full_text = current_node.full_text or ""
             completion = current_node.completion or ""
-            
+
+
+
             # Display using two-step approach to show completion after cursor:
             # 1. Print line WITH completion (moves cursor to end of completion)
             # 2. Print line WITHOUT completion (moves cursor back to end of text, but gray text remains)
             if completion:
                 # Clear line first to remove any old characters
                 formatted_with = format_with_completion(full_text, completion)
-                print(f"\r\033[K{formatted_with}", end="", flush=True)
+
+                safe_print(f"\r\033[K{formatted_with}", end="", flush=True)
                 # Step 2: Print without completion (don't clear - gray text stays visible)
                 formatted_without = format_text_only(full_text)
-                print(f"\r{formatted_without}", end="", flush=True)
-            else:
+                safe_print(f"\r{formatted_without}", end="", flush=True)
+            elif has_typed:
                 # No completion, just print the text
                 formatted = format_text_only(full_text)
-                print(f"\r\033[K{formatted}", end="", flush=True)
-            
+                safe_print(f"\r\033[K{formatted}", end="", flush=True)
             # Read a character
             ch = get_char()
-            
+
             if ch is None:
                 break
-            
+
+            if not has_typed:
+                has_typed = True
+
+
             # Handle special characters
             if ord(ch) == 3:  # Ctrl+C
                 if noisy:
-                    print("\n\nExiting...")
+                    safe_print("\n\nExiting...")
                 break
             elif ord(ch) == 4:  # Ctrl+D (EOF)
                 if noisy:
-                    print("\n\nExiting...")
+                    safe_print("\n\nExiting...")
                 break
             elif ch == '\t':  # Tab - accept completion
                 if completion:
@@ -183,7 +216,7 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False):
                     # Show just the accepted text in normal color (no completion)
                     full_text = current_node.full_text or ""
                     formatted = format_text_only(full_text)
-                    print(f"\r\033[K{formatted}", end="", flush=True)
+                    safe_print(f"\r\033[K{formatted}", end="", flush=True)
                 continue
             elif ch == '\b' or ord(ch) == 127:  # Backspace
                 # Use trie's built-in backspace handling via walk_to
@@ -194,8 +227,8 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False):
                 if completion:
                     current_node = current_node.accept()
                     full_text = current_node.full_text or ""
-                # Clear line, print final text, then newline before exiting
-                print(f"\r\033[K{full_text}")  # Clear to end, print text, newline
+                # Clear line, print final text to display stream, then newline before exiting
+                safe_print(f"\r\033[K{full_text}")  # Clear to end, print text, newline
                 break
             elif ch.startswith('\033') and ('13;2' in ch or 'OM' in ch):  # Shift+Enter (escape sequence)
                 # Shift+Enter detected - insert newline instead of exiting
@@ -205,7 +238,7 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False):
                     current_node = current_node.accept()
                     full_text = current_node.full_text or ""
                 # Clear line and print final text, then newline
-                print(f"\r\033[K{full_text}")  # Clear to end, print text, newline
+                safe_print(f"\r\033[K{full_text}")  # Clear to end, print text, newline
                 # Reset to root for new line
                 current_node = trie
                 continue
@@ -214,16 +247,35 @@ def interactive_demo(trie: Trie | None = None, noisy: bool = False):
                 current_node = current_node.walk_to(ch, create_nodes=False)
     except KeyboardInterrupt:
         if noisy:
-            print("\n\nExiting...")
+            safe_print("\n\nExiting...")
+    except BrokenPipeError:
+        # Handle broken pipe gracefully when stdout is closed
+        pass
     except Exception as e:
-        print(f"\n\nError: {e}")
+        safe_print(f"\n\nError: {e}")
         import traceback
-        traceback.print_exc()
+        traceback.print_exc(file=display_stream)
     finally:
-        # Restore terminal and print final text
-        # print(f"\r{' ' * 100}\r{full_text}", flush=True)
-        # print()
-        return current_node.full_text
+        # Write final result to stdout (only when piped, otherwise it's already there)
+        final_text = current_node.full_text or ""
+        if is_piped:
+            try:
+                print(final_text, file=sys.stdout, flush=True)
+            except BrokenPipeError:
+                # If stdout is closed, just ignore
+                pass
+            finally:
+                # Close stdout and stderr to prevent Python from trying to flush them
+                # during shutdown, which causes "Exception ignored" messages
+                try:
+                    sys.stdout.close()
+                except (BrokenPipeError, OSError):
+                    pass
+                try:
+                    sys.stderr.close()
+                except (BrokenPipeError, OSError):
+                    pass
+        return final_text
 
 
 
@@ -267,19 +319,24 @@ Examples:
     
     args = parser.parse_args()
     
+    # Detect if stdout is being piped
+    is_piped = not sys.stdout.isatty()
+    # When piped, send noisy messages to stderr
+    noisy_stream = sys.stderr if is_piped else sys.stdout
+    
     # Load trie from file or use demo
     if args.word_file:
         if args.noisy:
-            print(f"Loading trie from: {args.word_file}")
+            print(f"Loading trie from: {args.word_file}", file=noisy_stream)
         try:
             trie = Trie.from_file(args.word_file)
             if args.noisy:
-                print(f"Loaded trie with {len(trie.root.words)} words\n")
+                print(f"Loaded trie with {len(trie.root.words)} words\n", file=noisy_stream)
             interactive_demo(trie, noisy=args.noisy)
         except Exception as e:
-            print(f"Error loading trie: {e}")
+            print(f"Error loading trie: {e}", file=noisy_stream)
             if args.noisy:
-                print("Falling back to demo trie...\n")
+                print("Falling back to demo trie...\n", file=noisy_stream)
             interactive_demo(noisy=args.noisy)
     else:
         # Use demo trie
