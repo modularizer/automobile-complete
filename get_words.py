@@ -7,27 +7,38 @@ from wordfreq import iter_wordlist, zipf_frequency
 
 
 Words = list[tuple[str, float]]
-Sort = Literal["alpha","freq"]
+Sort = Literal["prefix","freq"]
 
 def get_words(
-    lang: str = "en",
+    lang: str | None = "en",
     pattern: str = r"^[a-zA-Z].+",
     max_words: int | None = None,
     min_length: int  = 2,
-    sort_by: Sort = "freq",
+    custom_words: dict[str, int] | list[str] | None = None,
+    custom_words_anchor: int = 200,
 ) -> Words:
     """Get an alphabetically sorted lisit of words and their frequencies."""
-    words_by_freq = [w for w in iter_wordlist(lang) if re.match(pattern, w) and len(w) >= min_length]
+    if not lang:
+        words_by_freq = []
+        word_occurences = []
+        anchor_freq = 1
+    else:
+        words_by_freq = [w for w in iter_wordlist(lang) if re.match(pattern, w) and len(w) >= min_length]
 
-    if max_words:
-        words_by_freq = words_by_freq[:max_words]
+        custom_words_anchor = max(-len(words_by_freq), min(len(words_by_freq), custom_words_anchor))
 
-    # zipf_frequency returns log10(freq per million)
-    word_occurences = [10 ** zipf_frequency(k, lang) for k in words_by_freq]
-    z = zip(words_by_freq, word_occurences)
-    if sort_by == "alpha":
-        return list(sorted(z))
-    return list(z)
+        anchor_freq = 10 ** zipf_frequency(words_by_freq[custom_words_anchor], lang) + 0.1
+        word_occurences = [10 ** zipf_frequency(k, lang) for k in words_by_freq]
+
+    cw = {cw: anchor_freq for cw in custom_words} if isinstance(custom_words, list) else {w: v*anchor_freq for w, v in custom_words.items()}
+    cw = {w: v for w, v in cw.items() if w not in words_by_freq}
+
+    all_words = words_by_freq +list(cw.keys())
+
+    all_freqs = word_occurences + list(cw.values())
+    z = zip(all_words, all_freqs)
+    z = list(sorted(z, key= lambda x: x[1], reverse=True))[:max_words]
+    return z
 
 
 class Node:
@@ -332,18 +343,31 @@ def build_json(node: Node):
     return d
 
 
+def build_map(node: Node, map: dict | None = None, calc: bool = True):
+    map = map if map is not None else {}
+    if node.auto_suffix:
+        w = node.prefix + node.auto_suffix
+        if w not in map:
+            map[w] = [node.prefix, node.auto_suffix]
+    for child in node.children.values():
+        build_map(child, map, False)
+    return dict(sorted(map.values())) if calc else None
+
+
 def get_autocomplete_trie(
     word_threshold: float | None = None,
     subtree_threshold: float | None = 0.5,
         subtree_ratio_threshold: float = 3,
-    lang: str = "en",
+    lang: str | None = "en",
     pattern: str = r"^[a-zA-Z].+",
     max_words: int | None = None,
     min_suffix_len: int = 2,
         min_prefix_len: int = 2,
     prune: bool = False,
+custom_words: dict[str, int] | list[str] | None = None,
+    custom_words_anchor: int = 200,
 ) -> Node:
-    words = get_words(lang, pattern, max_words, min_length = min_suffix_len + 1)
+    words = get_words(lang, pattern, max_words, min_length = min_suffix_len + 1, custom_words = custom_words, custom_words_anchor = custom_words_anchor)
     tree = build_trie(words)
     word_list = [w for (w, _) in words]
     dfs(word_list, tree, 1,
@@ -357,7 +381,30 @@ def get_autocomplete_trie(
     if prune:
         prune_tree(tree)
     j = build_json(tree)
-    return tree, j
+    return tree
+
+
+def parse_custom_words(src: str | Path):
+    src = Path(src)
+    if src.suffix == ".json":
+        with open(src) as f:
+            return json.load(f)
+    lines = [x.strip() for x in Path(src).read_text().splitlines()]
+    lines = [x for x in lines if x]
+    cw = {}
+    m = {}
+    for line in lines:
+        if re.match(r"^.*,\d+", line):
+            v, f = line.rsplit(",",maxsplit = 1)
+            cw[v] = int(f)
+        elif re.match(r"^.+\|.+", line):
+            pre, post = line.rsplit("|",maxsplit = 1)
+            m[pre] = post
+        else:
+            cw[line] = 1
+    if all(v == 1 for v in cw.values()):
+        return list(cw.keys()), m
+    return cw, m
 
 
 def write_trie(
@@ -365,13 +412,20 @@ def write_trie(
     word_threshold: float | None = None,
     subtree_threshold: float | None = 0.5,
     subtree_ratio_threshold: float = 3,
-    lang: str = "en",
+    lang: str | None = "en",
     pattern: str = r"^[a-zA-Z].+",
     max_words: int | None = None,
-        min_prefix_len: int = 2,
+    min_prefix_len: int = 2,
     min_suffix_len: int = 2,
+    custom_words: str | Path | dict[str, int] | list[str] | None = None,
+    custom_words_anchor: int = 200,
+        indent: int = 2,
 ):
     dst = Path(dst or f"trie.json")
+    if isinstance(custom_words, str | Path):
+        custom_words, custom_map = parse_custom_words(custom_words)
+    else:
+        custom_map = {}
     params = {
         "word_threshold": word_threshold,
         "subtree_threshold": subtree_threshold,
@@ -381,23 +435,97 @@ def write_trie(
         "max_words": max_words,
         "min_suffix_len": min_suffix_len,
         "min_prefix_len": min_prefix_len,
+        "custom_words": custom_words,
+        "custom_words_anchor": custom_words_anchor,
     }
-    tree, j = get_autocomplete_trie(**params)
+    tree = get_autocomplete_trie(**params)
+    m = dict(sorted(list(build_map(tree).items()) + list(custom_map.items())))
+    words = [f"{k}|{v}" for k, v in m.items()]
     if dst is not None:
         dst.parent.mkdir(parents=True, exist_ok=True)
-        s = json.dumps({"params": params, "trie": j})
-        print(len(s))
-        dst.write_text(s)
-    return tree
+        if dst.suffix == ".json":
+            s = json.dumps({"params": params, "words": words}, indent=indent)
+            print(len(s))
+            dst.write_text(s)
+        elif dst.suffix == ".js":
+            p = json.dumps(params, indent=indent)
+            s = json.dumps(words, indent=indent)
+            dst.write_text(f"const params = {p};\n\nconst words = {s};\n\nexport default words;")
+        elif dst.suffix == ".ts":
+            p = json.dumps(params, indent=indent)
+            s = json.dumps(words, indent=indent)
+            dst.write_text(f"const params: Record<string, any> = {p};\n\nconst words: string[] = {s};\n\nexport default words;")
+        elif dst.suffix == ".py":
+            p = json.dumps(params, indent=indent)
+            s = json.dumps(words, indent=indent)
+            dst.write_text(f"params = {p}\n\nwords = {s}\n\n")
+        elif dst.suffix == ".txt":
+            s = "\n".join(f"{k}|{v}" for k, v in m.items())
+            dst.write_text(s)
+        elif dst.suffix == ".dart":
+            p = json.dumps(params, indent=indent)
+            s = json.dumps(words, indent=indent)
+            dst.write_text(
+                "final Map<String, dynamic> params = "
+                f"{p};\n\n"
+                "final List<String> words = "
+                f"{s};\n"
+            )
+        elif dst.suffix == ".swift":
+            p = json.dumps(params, indent=indent)
+            s = json.dumps(words, indent=indent)
+            dst.write_text(
+                "let params: [String: Any] = "
+                f"{p}\n\n"
+                "let words: [String] = "
+                f"{s}\n"
+            )
+
+        elif dst.suffix == ".kt":  # Kotlin
+            p = json.dumps(params, indent=indent)
+            s = json.dumps(words, indent=indent)
+            dst.write_text(
+                "val params: Map<String, Any?> = "
+                f"{p}\n\n"
+                "val words: List<String> = "
+                f"{s}\n"
+            )
+
+        elif dst.suffix == ".go":
+            p = json.dumps(params, indent=indent)
+            s = json.dumps(words, indent=indent)
+            dst.write_text(
+                "package data\n\n"
+                "var Params = "
+                f"{p}\n\n"
+                "var Words = "
+                f"{s}\n"
+            )
+
+        elif dst.suffix == ".rs":  # Rust
+            p = json.dumps(params, indent=indent)
+            s = json.dumps(words, indent=indent)
+            dst.write_text(
+                "use std::collections::HashMap;\n\n"
+                f"static PARAMS: &str = r#\"{p}\"#;\n\n"
+                f"static WORDS: &str = r#\"{s}\"#;\n"
+            )
+        else:
+            raise NotImplementedError(dst.suffix)
+    return tree, words
 
 
 if __name__ == "__main__":
-    t = write_trie(
-        pattern=r"^[a-zA-Z]+$",
+    t, w = write_trie(
+        lang="en",
+        pattern=r"^[a-zA-Z'\-_]+$",
         word_threshold=0.25, # there must be atleast 10% chance this is the right word
         subtree_threshold=0.5, # there must be atleast 25% chance this OR an extension of this is the right word
-        subtree_ratio_threshold=3, # this option must be atleast 1.5x as good as any other
-        min_prefix_len=1,
-        min_suffix_len=3,
-        max_words=100_000
+        # subtree_ratio_threshold=3, # this option must be atleast 1.5x as good as any other
+        min_prefix_len=2,
+        min_suffix_len=2,
+        max_words=100_000,
+        custom_words="custom.txt",
+        custom_words_anchor=200,
+        dst="out.txt"
     )
