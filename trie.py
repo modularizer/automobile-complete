@@ -14,7 +14,6 @@ with support for displaying completion suggestions in a user-friendly format.
 """
 
 import re
-import time
 from pathlib import Path
 
 FINALE_PART = re.compile(r"[A-Za-z0-9']+$")
@@ -44,7 +43,6 @@ class CoreTrie:
         root: Reference to the root node of the trie
         parent: Reference to the parent node
         prefix: The prefix string represented by this node
-        num_accepted: Number of characters accepted from completion
         config: Configuration dictionary for trie behavior
         full_text: Full text accumulated during navigation (if caching enabled)
     """
@@ -116,7 +114,6 @@ class CoreTrie:
         self.root = r
         self.parent = parent if parent is not None else r  # Parent node
         self.prefix = prefix  # Prefix string this node represents
-        self.num_accepted = 0  # Number of characters accepted from completion
 
         if root is not None:
             self.config = r.config
@@ -222,9 +219,7 @@ class CoreTrie:
         for ch in v:
             # Handle backspace character: delete last character and move to parent
             if handle_control_characters and ch == "\b"  and "\b" not in node.children:
-
                 s = s[:-1]  # Remove last character from full text
-
                 m = re.search(FINALE_PART, s)
                 prefix = m.group(0) if m else ""
                 node = node.root.clone(s).walk_to(prefix)
@@ -235,16 +230,19 @@ class CoreTrie:
                 n: int = len(c)  # Length of accepted completion
                 # Recursively walk through the completion string
                 node = node.walk_to(c, handle_control_characters=handle_control_characters)
-                node.num_accepted = n  # Record how many characters were accepted
             # Handle normal characters
             else:
+                k = ch.lower() if ci else ch
                 s += ch  # Add character to full text
-                # Look up child node (case-insensitive if enabled)
-                n = node.children.get(ch.lower() if ci else ch)
-                if n is None:
-                    # Create new child node if it doesn't exist
-                    n = node.child(ch)
-                node = n  # Move to child node
+                if node.completion and node.completion[0] == k:
+                    nn = node.child(ch, node.completion[1:])
+                else:
+                    # Look up child node (case-insensitive if enabled)
+                    nn = node.children.get(k)
+                    if nn is None:
+                        # Create new child node if it doesn't exist
+                        nn = node.child(ch)
+                node = nn  # Move to child node
 
             # Reset to root if we hit an empty node and a reset character
             # (Reset characters are non-alphabetic, non-control characters like space, punctuation)
@@ -342,22 +340,6 @@ class CoreTrie:
         node.index = self.counter
         self.words.append(node)
 
-        # Build completion chain (again with the simple builder)
-        for i, ch in enumerate(post[:-1]):
-            child = node.children.get(ch)
-            if child is None:
-                # very lightweight child creation, see #2
-                child = T(
-                    completion="",
-                    children={},
-                    root=root,
-                    parent=node,
-                    prefix=node.prefix + ch,
-                )
-                node.children[ch] = child
-            node = child
-            node.completion = post[i + 1:]
-
     def accept(self) -> "CoreTrie":
         """
         Accept the completion at this node.
@@ -412,7 +394,7 @@ class Trie(CoreTrie):
         return self.config["repr_terminal_colors"]
 
 
-    def as_string(self, full_text: str = None, use_terminal_colors: bool | None = None, num_accepted: int = None) -> str:
+    def as_string(self, full_text: str = None, use_terminal_colors: bool | None = None) -> str:
         """
         Format the trie state as a string with visual indicators.
         
@@ -425,13 +407,11 @@ class Trie(CoreTrie):
         Args:
             full_text: Full text to display. If None, uses self.full_text.
             use_terminal_colors: Whether to use ANSI color codes. If None, uses configured value.
-            num_accepted: Number of accepted characters to highlight in green. If None, uses self.num_accepted.
         
         Returns:
             Formatted string representation of the trie state.
         """
         full_text: str = full_text if full_text is not None else self.full_text
-        num_accepted: int = num_accepted if num_accepted is not None else self.num_accepted
         u: bool = use_terminal_colors if use_terminal_colors is not None else self.use_terminal_colors
         start2: str = "\033[37m" if u else ""  # Color for completion text (white)
         start: str = "\033[38;5;233m" if u else ""  # Color for before-state text (dark gray)
@@ -449,16 +429,11 @@ class Trie(CoreTrie):
 
         # Current prefix (may be highlighted if partially accepted)
         p: str = full_text[-len(self.prefix):] if full_text and self.prefix else self.prefix
-
-        # Highlight accepted portion in green if applicable
-        if num_accepted and u:
-            green: str = "\033[32m"  # Green color code
-            p = p[:-num_accepted] + green + p[-num_accepted:]
         s: str = f"{b}{p}│{start2}{c}{end}"  # Format: before|prefix│completion
         return s
 
 
-    def show(self, disappearing: bool = False, full_text: str = None, use_terminal_colors: bool | None = None, num_accepted: int = None) -> str:
+    def show(self, disappearing: bool = False, full_text: str = None, use_terminal_colors: bool | None = None) -> str:
         """
         Display the trie state to stdout.
         
@@ -470,12 +445,11 @@ class Trie(CoreTrie):
                 If False, use \n for permanent display.
             full_text: Full text to display. If None, uses self.full_text.
             use_terminal_colors: Whether to use ANSI color codes. If None, uses configured value.
-            num_accepted: Number of accepted characters to highlight. If None, uses self.num_accepted.
         
         Returns:
             The formatted string that was printed.
         """
-        s: str = self.as_string(full_text=full_text, use_terminal_colors=use_terminal_colors, num_accepted=num_accepted)
+        s: str = self.as_string(full_text=full_text, use_terminal_colors=use_terminal_colors)
         print(s, end="\r" if disappearing else "\n")
         return s
 
@@ -641,9 +615,5 @@ hippopotamuses a|re fat
           # disappearing=False
           )
 
-
-    t = Trie.demo(
-        # disappearing=False
-    )
 
 

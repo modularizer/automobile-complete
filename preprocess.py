@@ -1124,8 +1124,8 @@ Examples:
     parser.add_argument(
         "--max-words",
         type=int,
-        default=None,
-        help="Maximum number of words to include. Default: unlimited"
+        default=100_000,
+        help="Maximum number of words to include. Default: 100_000"
     )
     
     # Thresholds for autocomplete selection
@@ -1139,7 +1139,7 @@ Examples:
     parser.add_argument(
         "--subtree-threshold",
         type=float,
-        default=0.4,
+        default=0.5,
         help="Minimum probability threshold (0.0-1.0) for a subtree to be considered. Default: 0.5"
     )
 
@@ -1153,7 +1153,7 @@ Examples:
     parser.add_argument(
         "--subtree-ratio-threshold",
         type=float,
-        default=1.5,
+        default=2,
         help="The selected completion must be this many times more likely than any alternative. Default: 1.5"
     )
     
