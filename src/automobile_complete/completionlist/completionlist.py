@@ -44,8 +44,13 @@ def build_completionlist(
     Returns:
         List of completion strings in "pre|post #freq" or "pre|post" format
     """
-    all_words = read_wordlist_file(wordlist_file)
+    # Expand ~ in path
+    wordlist_file = Path(wordlist_file).expanduser()
+    wordlist_dict = read_wordlist_file(wordlist_file)
     
+    # Convert dict to list of tuples and sort by frequency (descending)
+    # Remove duplicates (keep first occurrence when sorted)
+    all_words = list(wordlist_dict.items())
     # Sort by frequency (descending) and remove duplicates (keep first occurrence)
     seen = set()
     unique_words = []
@@ -54,6 +59,9 @@ def build_completionlist(
             seen.add(word)
             unique_words.append((word, freq))
     all_words = unique_words
+    
+    # Create word frequency dict once (for efficient lookup later)
+    word_freq_dict = dict(all_words)
     
     # Build trie
     anchor_freq = all_words[0][1] if all_words else 1.0
@@ -85,7 +93,7 @@ def build_completionlist(
         # prefix_completion is a list [prefix, completion]
         prefix, completion = prefix_completion[0], prefix_completion[1]
         # Find frequency for this word
-        word_freq = dict(all_words).get(word, 1.0)
+        word_freq = word_freq_dict.get(word, 1.0)
         
         if preserve_freqs:
             rounded_freq = int(round(word_freq))
@@ -94,7 +102,6 @@ def build_completionlist(
             output_lines.append(f"{prefix}|{completion}")
     
     # Sort by frequency (descending)
-    word_freq_dict = dict(all_words)
     output_lines.sort(
         key=lambda line: (
             int(re.search(r"#(\d+)$", line).group(1)) if re.search(r"#(\d+)$", line) else 0
@@ -104,6 +111,7 @@ def build_completionlist(
     
     # Write output
     if output_file:
+        output_file = Path(output_file).expanduser()
         output_file.parent.mkdir(parents=True, exist_ok=True)
         output_file.write_text("\n".join(output_lines))
     

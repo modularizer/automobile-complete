@@ -6,6 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
+from automobile_complete.utils.env import load_env_sample, load_env, get_env, get_env_bool
 from automobile_complete.wordlist.merge.merge import merge_wordlists
 
 
@@ -42,6 +43,9 @@ def main():
     """
     Command-line interface for merging wordlists.
     """
+    # Load .env.sample first (single source of truth for defaults)
+    load_env_sample()
+    
     parser = argparse.ArgumentParser(
         description="Merge multiple wordlist files with optional weights",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -73,8 +77,8 @@ Examples:
     parser.add_argument(
         "-o", "--output",
         type=str,
-        required=True,
-        help="Output file path for merged wordlist"
+        default=get_env("AMC_WORDLIST_FILE"),
+        help=f"Output file path for merged wordlist. Default from .env.sample: {get_env('AMC_WORDLIST_FILE') or '(not set)'}"
     )
     
     parser.add_argument(
@@ -93,7 +97,25 @@ Examples:
         help="Omit frequency information from output (format: 'word' instead of 'word #freq')"
     )
     
+    parser.add_argument(
+        "--env-file",
+        type=str,
+        default=None,
+        help="Path to .env file to load (overrides .env.sample). Default: .env in project root"
+    )
+    
     args = parser.parse_args()
+    
+    # Load .env or --env-file (overrides .env.sample)
+    load_env(env_file=Path(args.env_file).expanduser() if args.env_file else None)
+    
+    # Re-check defaults after loading .env (in case user wants to override via .env)
+    if not args.output:
+        args.output = get_env("AMC_WORDLIST_FILE")
+    
+    # Check env var for --no-freqs if flag not set
+    if not args.no_freqs:
+        args.no_freqs = get_env_bool("AMC_WORDLIST_MERGE_NO_FREQS", False)
     
     if len(args.wordlist_files) < 2:
         parser.error("At least two wordlist files are required for merging")
@@ -108,9 +130,9 @@ Examples:
         except ValueError as e:
             parser.error(f"Error parsing weights: {e}")
     
-    # Convert to Path objects
-    wordlist_files = [Path(f) for f in args.wordlist_files]
-    output_file = Path(args.output)
+    # Convert to Path objects (expand ~ in paths)
+    wordlist_files = [Path(f).expanduser() for f in args.wordlist_files]
+    output_file = Path(args.output).expanduser()
     
     # Merge wordlists
     try:

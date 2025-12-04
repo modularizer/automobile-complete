@@ -99,9 +99,10 @@ def merge_wordlists(
     if not wordlist_files:
         raise ValueError("At least one wordlist file is required")
     
-    # Parse all wordlists
+    # Parse all wordlists (expand ~ in paths)
     wordlists = []
     for wordlist_file in wordlist_files:
+        wordlist_file = Path(wordlist_file).expanduser()
         if not wordlist_file.exists():
             raise FileNotFoundError(f"Wordlist file not found: {wordlist_file}")
         wordlists.append(read_wordlist_file(wordlist_file))
@@ -150,6 +151,7 @@ def merge_wordlists(
     
     # Write output
     if output_file:
+        output_file = Path(output_file).expanduser()
         output_file.parent.mkdir(parents=True, exist_ok=True)
         output_file.write_text("\n".join(output_lines))
     

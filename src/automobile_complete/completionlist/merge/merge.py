@@ -6,7 +6,7 @@ Handles conflicting paths by disabling lower-weighted completions.
 """
 from pathlib import Path
 
-from automobile_complete import Node
+from automobile_complete.completionlist.node import Node
 from automobile_complete.completionlist.parse import parse_completion_file
 from automobile_complete.utils.typehints import Words
 from automobile_complete.wordlist.merge.merge import (
@@ -45,9 +45,10 @@ def merge_completions(
     if not completion_files:
         raise ValueError("At least one completion file is required")
     
-    # Parse all completion files
+    # Parse all completion files (expand ~ in paths)
     all_completions = []
     for completion_file in completion_files:
+        completion_file = Path(completion_file).expanduser()
         if not completion_file.exists():
             raise FileNotFoundError(f"Completion file not found: {completion_file}")
         all_completions.append(parse_completion_file(completion_file))
@@ -181,6 +182,7 @@ def merge_completions(
     
     # Write output
     if output_file:
+        output_file = Path(output_file).expanduser()
         output_file.parent.mkdir(parents=True, exist_ok=True)
         output_file.write_text("\n".join(output_lines))
     

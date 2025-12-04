@@ -9,12 +9,12 @@ def read_wordlist_file(path: str | Path) -> dict[Word, Freq]:
     Parse a wordlist file into a word->frequency dictionary.
 
     Args:
-        path: Path to wordlist file
+        path: Path to wordlist file (supports ~ for home directory)
 
     Returns:
         Dictionary mapping words to frequencies. Words without frequency default to 1.0
     """
-    src = Path(path)
+    src = Path(path).expanduser()
     if not src.exists():
         raise FileNotFoundError(f"Wordlist file not found: {src}")
     word_freqs = {}

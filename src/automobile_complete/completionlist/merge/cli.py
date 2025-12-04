@@ -6,6 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
+from automobile_complete.utils.env import load_env_sample, load_env, get_env, get_env_bool
 from automobile_complete.completionlist.merge.merge import merge_completions
 
 
@@ -42,6 +43,9 @@ def main():
     """
     Command-line interface for merging preprocessed completions.
     """
+    # Load .env.sample first (single source of truth for defaults)
+    load_env_sample()
+    
     parser = argparse.ArgumentParser(
         description="Merge multiple preprocessed completion files with optional weights",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -73,8 +77,8 @@ Examples:
     parser.add_argument(
         "-o", "--output",
         type=str,
-        required=True,
-        help="Output file path for merged completions"
+        default=get_env("AMC_COMPLETIONLIST_FILE"),
+        help=f"Output file path for merged completions. Default from .env.sample: {get_env('AMC_COMPLETIONLIST_FILE') or '(not set)'}"
     )
     
     parser.add_argument(
@@ -93,7 +97,25 @@ Examples:
         help="Omit frequency information from output (format: 'pre|post' instead of 'pre|post #freq')"
     )
     
+    parser.add_argument(
+        "--env-file",
+        type=str,
+        default=None,
+        help="Path to .env file to load (overrides .env.sample). Default: .env in project root"
+    )
+    
     args = parser.parse_args()
+    
+    # Load .env or --env-file (overrides .env.sample)
+    load_env(env_file=Path(args.env_file).expanduser() if args.env_file else None)
+    
+    # Re-check defaults after loading .env (in case user wants to override via .env)
+    if not args.output:
+        args.output = get_env("AMC_COMPLETIONLIST_FILE")
+    
+    # Check env var for --no-freqs if flag not set
+    if not args.no_freqs:
+        args.no_freqs = get_env_bool("AMC_COMPLETIONLIST_MERGE_NO_FREQS", False)
     
     if len(args.completion_files) < 2:
         parser.error("At least two completion files are required for merging")
@@ -110,9 +132,9 @@ Examples:
         except ValueError as e:
             parser.error(f"Error parsing weights: {e}")
     
-    # Convert to Path objects
-    completion_files = [Path(f) for f in args.completion_files]
-    output_file = Path(args.output)
+    # Convert to Path objects (expand ~ in paths)
+    completion_files = [Path(f).expanduser() for f in args.completion_files]
+    output_file = Path(args.output).expanduser()
     
     # Merge completions
     try:

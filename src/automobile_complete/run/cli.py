@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Literal, Any
 
 from automobile_complete.engine import Trie
+from automobile_complete.utils.env import load_env_sample, load_env, get_env, get_env_bool
 from automobile_complete.utils.chars import BACKSPACE, TAB, CTRL_D_ORD, CTRL_C_ORD, BACKSPACE_ORD, CARRIAGE_RETURN
 from automobile_complete.utils.colors import RESET, REPLACE_LINE, GRAY, ESC
 
@@ -292,21 +293,35 @@ Examples:
         """
     )
     
+    # Load .env.sample first (single source of truth for defaults)
+    load_env_sample()
+    
+    default_completion_file = get_env("AMC_COMPLETIONLIST_FILE")
     parser.add_argument(
         "completion_files",
         type=str,
         nargs="*",
-        default=["out.txt"],
-        help="One or more completion files to load (pre|post #freq format). If not provided, uses out.txt."
+        default=[default_completion_file] if default_completion_file else [],
+        help=f"One or more completion files to load (pre|post #freq format). Default from .env.sample: {default_completion_file or '(not set)'}"
     )
     
     parser.add_argument(
         "-n", "--noisy",
         action="store_true",
-        help="Enable verbose output (show loading messages, etc.)"
+        help=f"Enable verbose output (show loading messages, etc.). Default from .env.sample: {get_env('AMC_RUN_NOISY') or 'false'}"
+    )
+    
+    parser.add_argument(
+        "--env-file",
+        type=str,
+        default=None,
+        help="Path to .env file to load (overrides .env.sample). Default: .env in project root"
     )
     
     args = parser.parse_args()
+    
+    # Load .env or --env-file (overrides .env.sample)
+    load_env(env_file=Path(args.env_file).expanduser() if args.env_file else None)
     
     # Detect if stdout is being piped
     is_piped = not sys.stdout.isatty()
@@ -314,16 +329,22 @@ Examples:
     noisy_stream = sys.stderr if is_piped else sys.stdout
     
     # Load trie from completion file(s)
-    completion_files = args.completion_files if args.completion_files else ["out.txt"]
+    # Re-check defaults after loading .env (in case user wants to override via .env)
+    default_completion_file = get_env("AMC_COMPLETIONLIST_FILE")
+    completion_files = args.completion_files if args.completion_files else ([default_completion_file] if default_completion_file else [])
+    
+    # Check env var for --noisy if flag not set
+    if not args.noisy:
+        args.noisy = get_env_bool("AMC_RUN_NOISY", False)
     
     if args.noisy:
         print(f"Loading trie from {len(completion_files)} file(s): {', '.join(completion_files)}", file=noisy_stream)
 
     t0 = time.perf_counter()
-    # Load all files and concatenate their content
+    # Load all files and concatenate their content (expand ~ in paths)
     all_lines = []
     for completion_file in completion_files:
-        file_path = Path(completion_file)
+        file_path = Path(completion_file).expanduser()
         if not file_path.exists():
             parser.error(f"Completion file not found: {completion_file}")
         all_lines.append(file_path.read_text())

@@ -39,11 +39,11 @@ dev = [
 ]
 
 [project.scripts]
-automobile-preprocess = "automobile_complete.preprocess.cli:main"
-automobile-cli = "automobile_complete.cli:main"
-automobile-wordlist = "automobile_complete.wordlist.cli:main"
-automobile-wordlist-merge = "automobile_complete.wordlist.merge.cli:main"
-automobile-preprocess-merge = "automobile_complete.preprocess.merge.cli:main"
+amc = "automobile_complete.cli:main"
+amcc = "automobile_complete.completionlist.cli:main"
+amcmc = "automobile_complete.completionlist.merge.cli:main"
+amcw = "automobile_complete.wordlist.write.cli:main"
+amcmw = "automobile_complete.wordlist.merge.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/modularizer/automobile-complete"

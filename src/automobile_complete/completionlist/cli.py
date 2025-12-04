@@ -5,10 +5,13 @@ Command-line interface for preprocessing wordlists into completions.
 import argparse
 from pathlib import Path
 
-from automobile_complete import build_completionlist
+from automobile_complete.utils.env import load_env_sample, load_env, get_env, get_env_bool, get_env_int, get_env_float
+from automobile_complete.completionlist import build_completionlist
 
 
 def main():
+    # Load .env.sample first (single source of truth for defaults)
+    load_env_sample()
     """
     Command-line interface for preprocessing wordlists into completions.
     """
@@ -34,56 +37,58 @@ Note: To merge multiple wordlists before preprocessing, use automobile-wordlist-
     parser.add_argument(
         "wordlist_file",
         type=str,
-        help="Wordlist file to process (word #freq or word format)"
+        nargs="?",
+        default=get_env("AMC_WORDLIST_FILE"),
+        help=f"Wordlist file to process (word #freq or word format). Default from .env.sample: {get_env('AMC_WORDLIST_FILE') or '(not set)'}"
     )
     
     parser.add_argument(
         "-o", "--output",
         type=str,
-        required=True,
-        help="Output file path for completions (pre|post #freq format)"
+        default=get_env("AMC_COMPLETIONLIST_FILE"),
+        help=f"Output file path for completions (pre|post #freq format). Default from .env.sample: {get_env('AMC_COMPLETIONLIST_FILE') or '(not set)'}"
     )
     
     parser.add_argument(
         "--word-threshold",
         type=float,
-        default=None,
-        help="Minimum probability threshold (0.0-1.0) for word completion. Default: None (uses subtree-threshold)"
+        default=get_env_float("AMC_COMPLETIONLIST_WORD_THRESHOLD"),
+        help=f"Minimum probability threshold (0.0-1.0) for word completion. Default from .env.sample: {get_env('AMC_COMPLETIONLIST_WORD_THRESHOLD') or '(uses subtree-threshold)'}"
     )
     
     parser.add_argument(
         "--subtree-threshold",
         type=float,
-        default=0.5,
-        help="Minimum probability threshold (0.0-1.0) for subtree completion. Default: 0.5"
+        default=get_env_float("AMC_COMPLETIONLIST_SUBTREE_THRESHOLD", 0.5),
+        help=f"Minimum probability threshold (0.0-1.0) for subtree completion. Default from .env.sample: {get_env('AMC_COMPLETIONLIST_SUBTREE_THRESHOLD') or '0.5'}"
     )
     
     parser.add_argument(
         "--word-ratio-threshold",
         type=float,
-        default=1.0,
-        help="Selected completion must be this many times more likely than alternatives. Default: 1.0"
+        default=get_env_float("AMC_COMPLETIONLIST_WORD_RATIO_THRESHOLD", 1.0),
+        help=f"Selected completion must be this many times more likely than alternatives. Default from .env.sample: {get_env('AMC_COMPLETIONLIST_WORD_RATIO_THRESHOLD') or '1.0'}"
     )
     
     parser.add_argument(
         "--subtree-ratio-threshold",
         type=float,
-        default=1.0,
-        help="Selected completion must be this many times more likely than alternatives. Default: 1.0"
+        default=get_env_float("AMC_COMPLETIONLIST_SUBTREE_RATIO_THRESHOLD", 1.0),
+        help=f"Selected completion must be this many times more likely than alternatives. Default from .env.sample: {get_env('AMC_COMPLETIONLIST_SUBTREE_RATIO_THRESHOLD') or '1.0'}"
     )
     
     parser.add_argument(
         "--min-prefix-len",
         type=int,
-        default=2,
-        help="Minimum length of prefix before auto-completion. Default: 2"
+        default=get_env_int("AMC_COMPLETIONLIST_MIN_PREFIX_LEN", 2),
+        help=f"Minimum length of prefix before auto-completion. Default from .env.sample: {get_env('AMC_COMPLETIONLIST_MIN_PREFIX_LEN') or '2'}"
     )
     
     parser.add_argument(
         "--min-suffix-len",
         type=int,
-        default=2,
-        help="Minimum length of completion suffix. Default: 2"
+        default=get_env_int("AMC_COMPLETIONLIST_MIN_SUFFIX_LEN", 2),
+        help=f"Minimum length of completion suffix. Default from .env.sample: {get_env('AMC_COMPLETIONLIST_MIN_SUFFIX_LEN') or '2'}"
     )
     
     parser.add_argument(
@@ -92,11 +97,43 @@ Note: To merge multiple wordlists before preprocessing, use automobile-wordlist-
         help="Omit frequency information from output (format: 'pre|post' instead of 'pre|post #freq')"
     )
     
+    parser.add_argument(
+        "--env-file",
+        type=str,
+        default=None,
+        help="Path to .env file to load (overrides .env.sample). Default: .env in project root"
+    )
+    
     args = parser.parse_args()
     
-    # Convert to Path objects
-    wordlist_file = Path(args.wordlist_file)
-    output_file = Path(args.output)
+    # Load .env or --env-file (overrides .env.sample)
+    load_env(env_file=Path(args.env_file).expanduser() if args.env_file else None)
+    
+    # Re-check defaults after loading .env (in case user wants to override via .env)
+    if not args.wordlist_file:
+        args.wordlist_file = get_env("AMC_WORDLIST_FILE")
+    if not args.output:
+        args.output = get_env("AMC_COMPLETIONLIST_FILE")
+    if args.word_threshold is None:
+        args.word_threshold = get_env_float("AMC_COMPLETIONLIST_WORD_THRESHOLD")
+    if args.subtree_threshold is None:
+        args.subtree_threshold = get_env_float("AMC_COMPLETIONLIST_SUBTREE_THRESHOLD", 0.5)
+    if args.word_ratio_threshold is None:
+        args.word_ratio_threshold = get_env_float("AMC_COMPLETIONLIST_WORD_RATIO_THRESHOLD", 1.0)
+    if args.subtree_ratio_threshold is None:
+        args.subtree_ratio_threshold = get_env_float("AMC_COMPLETIONLIST_SUBTREE_RATIO_THRESHOLD", 1.0)
+    if args.min_prefix_len is None:
+        args.min_prefix_len = get_env_int("AMC_COMPLETIONLIST_MIN_PREFIX_LEN", 2)
+    if args.min_suffix_len is None:
+        args.min_suffix_len = get_env_int("AMC_COMPLETIONLIST_MIN_SUFFIX_LEN", 2)
+    
+    # Check env var for --no-preserve-freqs if flag not set
+    if not args.no_preserve_freqs:
+        args.no_preserve_freqs = get_env_bool("AMC_COMPLETIONLIST_NO_PRESERVE_FREQS", False)
+    
+    # Convert to Path objects (expand ~ in paths)
+    wordlist_file = Path(args.wordlist_file).expanduser()
+    output_file = Path(args.output).expanduser()
     
     # Preprocess
     try:

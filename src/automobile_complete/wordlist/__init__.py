@@ -10,6 +10,15 @@ Available generators:
 - merge: Merge multiple wordlists with weights
 """
 
-from .write import generate_wordfreq_wordlist, generate_corpus_wordlist, main as write_cli
-from .merge import merge_wordlists, main as merge_cli
-from .read import read_wordlist_file
+from automobile_complete.wordlist.write.wordfreq import generate_wordfreq_wordlist
+from automobile_complete.wordlist.write.corpus import generate_corpus_wordlist
+from automobile_complete.wordlist.merge.merge import merge_wordlists
+from automobile_complete.wordlist.write.cli import main
+
+__all__ = [
+    "generate_wordfreq_wordlist",
+    "generate_corpus_wordlist",
+    "merge_wordlists",
+    "main",
+]
+

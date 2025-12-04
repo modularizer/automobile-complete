@@ -13,11 +13,13 @@ def parse_completion_file(path: Path) -> list[tuple[str, str, float]]:
     Parse a completion file in pre|post #freq or pre|post format.
     
     Args:
-        path: Path to completion file
+        path: Path to completion file (supports ~ for home directory)
         
     Returns:
         List of (prefix, completion, frequency) tuples. Completions without frequency default to 1.0
     """
+    # Expand ~ in path
+    path = Path(path).expanduser()
     completions = []
     for line in path.read_text().splitlines():
         line = line.strip()

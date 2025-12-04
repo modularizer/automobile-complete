@@ -4,185 +4,30 @@ An intelligent autocomplete system that builds frequency-based trie data structu
 
 ## Overview
 
-This project implements a complete autocomplete pipeline with four main components:
+This project implements a complete autocomplete pipeline with four main steps:
 
-1. **Wordlist Converter** (`wordlist.py`) - Converts wordfreq wordlists to word #frequency format
-2. **Preprocessor** (`preprocess.py`) - Builds optimized trie data structures from wordlists
-3. **Engine** (`trie.py`) - Core trie implementation with completion logic
-4. **UI** (`cli.py`) - Interactive command-line interface for real-time autocomplete
+1. **Wordlist Generation** - Create wordlist files in `word #frequency` format
+2. **Completion List Generation** - Preprocess wordlists into completion files in `prefix|completion #frequency` format
+3. **Trie Engine** - Load completion files into trie data structures for efficient lookup
+4. **Interactive CLI** - Real-time autocomplete interface with inline gray text suggestions
 
 The system uses frequency-weighted word rankings to provide intelligent completion suggestions, similar to modern IDE autocomplete systems.
 
-## Components
-
-### 1. Wordlist Converter (`wordlist.py`)
-
-The wordlist converter extracts words from wordfreq language wordlists and converts them to the `word #frequency` format used by the project.
-
-**Key Features:**
-- Fetches words from wordfreq language wordlists
-- Filters words by pattern, length, and frequency
-- Supports custom words merging
-- Outputs in `word #frequency` format (one word per line)
-- Can write to file or stdout
-
-**Usage:**
-```bash
-# Convert English wordlist to file
-automobile-wordlist --output wordlist.txt --lang en
-
-# Convert with custom filters
-automobile-wordlist --output wordlist.txt --lang en --max-words 10000 --min-length 3
-
-# Convert Spanish wordlist
-automobile-wordlist --output spanish.txt --lang es
-
-# Write to stdout
-automobile-wordlist --lang en --max-words 100
-
-# Merge custom words
-automobile-wordlist --output wordlist.txt --lang en --custom-words custom.txt
-```
-
-**Output Format:**
-```
-the #53703180
-to #26915348
-and #25703958
-of #25118864
-in #18620871
-```
-
-This format can be used directly with the preprocessor or as input for building custom wordlists.
-
-### 2. Preprocessor (`preprocess.py`)
-
-The preprocessor is responsible for building optimized autocomplete trie data structures from language wordlists.
-
-**Key Features:**
-- Fetches words from language wordlists using the `wordfreq` library
-- Filters words by pattern, length, and frequency
-- Builds a trie (prefix tree) data structure for efficient prefix matching
-- Computes frequency statistics and auto-completion suggestions using depth-first search
-- Supports custom words with configurable frequency anchoring
-- Exports tries to multiple formats: JSON, JavaScript, TypeScript, Python, Dart, Swift, Kotlin, Go, Rust, or plain text
-
-**Usage:**
-```bash
-# Build a basic English trie
-automobile-preprocess --output out.txt
-
-# Build with custom words and thresholds
-automobile-preprocess --output out.txt --custom-words custom.txt \
-    --word-threshold 0.25 --subtree-threshold 0.5
-
-# Export as TypeScript
-automobile-preprocess --output trie.ts --lang en
-```
-
-**Key Functions:**
-- `get_words()` - Fetches and filters words from wordlists
-- `build_trie()` - Constructs the trie structure from words
-- `dfs()` - Computes frequency statistics and determines auto-completions
-- `write_trie()` - Exports the trie to various file formats
-
-The preprocessor uses sophisticated frequency analysis to determine when to suggest completions, considering both individual word frequencies and subtree frequencies (the total probability mass in a subtree).
-
-### 3. Engine (`trie.py`)
-
-The engine provides the core trie data structure and completion logic.
-
-**Key Features:**
-- **CoreTrie** - Base trie implementation with:
-  - Character-by-character navigation through the trie
-  - Completion suffix storage and retrieval
-  - Case-insensitive matching support
-  - Control character handling (tab for completion, backspace for deletion)
-  - Full text caching during navigation
-
-- **Trie** - Extended trie with visualization:
-  - Terminal color formatting for visual feedback
-  - String representation with formatted output
-  - Real-time simulation of typing with delays
-  - Visual display of accepted completions
-
-**Key Methods:**
-- `walk_to(text)` - Navigate through the trie by processing characters
-- `accept()` - Accept the current completion suggestion
-- `from_file(path)` - Load a trie from a word file
-- `from_words(*lines)` - Build a trie from word definitions
-- `sim(text)` - Simulate typing with autocomplete visualization
-
-**Word Format:**
-Words are stored in the format `prefix|completion #frequency`, where:
-- `prefix` is the typed portion
-- `completion` is the suggested suffix
-- `frequency` (optional) is the word's frequency weight
-
-### 4. UI (`cli.py`)
-
-The command-line interface provides an interactive autocomplete experience.
-
-**Key Features:**
-- Inline gray text completions (similar to modern IDEs)
-- Real-time updates as you type
-- Tab key to accept completions
-- Backspace to delete characters
-- Works with piped output (writes final result to stdout when piped)
-- Handles special keys (Ctrl+C to exit, Enter to finish)
-
-**Usage:**
-```bash
-# Run with default word file (out.txt)
-automobile-cli
-
-# Run with custom word file
-automobile-cli custom_words.txt
-
-# Run with verbose output
-automobile-cli --noisy
-```
-
-**How It Works:**
-1. Loads a trie from a word file (created by `preprocess.py`)
-2. Reads characters one at a time from stdin
-3. Navigates through the trie as you type
-4. Displays completion suggestions in light gray after the cursor
-5. Updates in real-time as you type or accept completions
-
-When stdout is piped, intermediate states are written to stderr or `/dev/tty`, and only the final text is written to stdout, making it suitable for shell scripting.
-
-## Workflow
-
-1. **Build the trie**: Use `automobile-preprocess` to create an optimized trie from wordlists
-   ```bash
-   automobile-preprocess --output out.txt --lang en --max-words 100000
-   ```
-
-2. **Use the autocomplete**: Run `automobile-cli` to interact with the trie
-   ```bash
-   automobile-cli out.txt
-   ```
-
-3. **Type and complete**: As you type, gray completion suggestions appear. Press Tab to accept.
-
-## Custom Words
-
-You can add custom words by creating a text file with one word per line:
+## Project Structure
 
 ```
-word #frequency
-prefix|completion
-another_word
-```
-
-- `word #frequency` - Word with explicit frequency
-- `prefix|completion` - Prefix to completion mapping
-- `word` - Word with default frequency 1
-
-Then use it with the preprocessor:
-```bash
-automobile-preprocess --custom-words custom.txt --output out.txt
+src/automobile_complete/
+├── wordlist/          # Wordlist generation and merging
+│   ├── write/         # Generate wordlists from wordfreq or corpus
+│   └── merge/         # Merge multiple wordlists with weights
+├── completionlist/    # Preprocess wordlists into completion lists
+│   ├── node.py        # Node-based trie implementation
+│   ├── completionlist.py  # Main preprocessing logic
+│   └── merge/         # Merge multiple completion lists with conflict resolution
+├── engine/            # Trie engine for interactive use
+│   ├── core_trie.py   # Core trie implementation
+│   └── trie.py        # Extended trie with visualization
+└── run/               # Interactive CLI runner
 ```
 
 ## Installation
@@ -193,7 +38,7 @@ Install the package in development mode:
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/modularizer/automobile-complete
 cd automobile-complete
 
 # Install in editable mode
@@ -208,52 +53,277 @@ pip install -e ".[dev]"
 - Python 3.8 or higher
 - `wordfreq` library (automatically installed as a dependency)
 
-## Usage
+## Workflow
 
-After installation, the CLI commands are available:
+The complete pipeline consists of four steps:
 
+### Step 1: Generate Wordlist
+
+Create a wordlist file in `word #frequency` format from wordfreq or corpus files.
+
+**From wordfreq:**
 ```bash
-# 1. Convert wordfreq wordlist to word #frequency format (optional)
-automobile-wordlist --output wordlist.txt --lang en --max-words 100000
-
-# 2. Build the trie
-automobile-preprocess --output out.txt --lang en
-
-# 3. Use interactive autocomplete
-automobile-cli out.txt
-
-# 4. Type something and see completions appear in gray
-#    Press Tab to accept, Backspace to delete
+amc w --output wordlist.txt --lang en --max-words 100000
 ```
 
-### Alternative: Direct Python Execution
+**From corpus files:**
+```bash
+amc w --output wordlist.txt --from-corpus file1.txt file2.txt
+```
 
-You can also run the modules directly:
+**Output Format:**
+```
+the #53703180
+to #26915348
+and #25703958
+of #25118864
+in #18620871
+```
+
+### Step 2: (Optional) Merge Wordlists
+
+Merge multiple wordlists with configurable weights:
 
 ```bash
-# Convert wordlist
-python -m automobile_complete.wordlist --output wordlist.txt --lang en
+# Merge with equal weights
+amc mw wordlist1.txt wordlist2.txt --output merged.txt
 
-# Build the trie
-python -m automobile_complete.preprocess --output out.txt --lang en
+# Merge with absolute weights
+amc mw wordlist1.txt wordlist2.txt --output merged.txt \
+    --weights 1.0 2.5
 
-# Use interactive autocomplete
-python -m automobile_complete.cli out.txt
+# Merge with relative weights (percentile-based)
+amc mw wordlist1.txt wordlist2.txt --output merged.txt \
+    --weights 1.0 '{"percentile": 50, "reference_percentile": 90, "reference_index": 0}'
 ```
+
+### Step 3: Generate Completion List
+
+Preprocess wordlist files into completion files in `prefix|completion #frequency` format:
+
+```bash
+# Basic preprocessing
+amc c wordlist.txt --output completions.txt
+
+# With custom thresholds
+amc c wordlist.txt --output completions.txt \
+    --word-threshold 0.25 --subtree-threshold 0.5
+
+# Without frequencies
+amc c wordlist.txt --output completions.txt --no-preserve-freqs
+```
+
+**Output Format:**
+```
+hel|lo #10
+wor|ld #20
+foo|bar #5
+```
+
+### Step 4: (Optional) Merge Completion Lists
+
+Merge multiple completion lists with conflict resolution (higher-weighted completions win):
+
+```bash
+# Merge with equal weights
+amc mc completions1.txt completions2.txt --output merged.txt
+
+# Merge with absolute weights
+amc mc completions1.txt completions2.txt --output merged.txt \
+    --weights 1.0 2.5
+```
+
+### Step 5: Use Interactive Autocomplete
+
+Run the interactive CLI with your completion file:
+
+```bash
+amc completions.txt
+```
+
+**Features:**
+- Inline gray text completions (similar to modern IDEs)
+- Real-time updates as you type
+- Tab key to accept completions
+- Backspace to delete characters
+- Works with piped output (writes final result to stdout when piped)
+
+## Components
+
+### 1. Wordlist Module (`wordlist/`)
+
+Generates wordlist files in `word #frequency` format.
+
+**Key Features:**
+- Generate from wordfreq language wordlists
+- Generate from corpus files (count word frequencies)
+- Filter by length, pattern, and frequency
+- Merge multiple wordlists with weights (absolute or percentile-based)
+
+**CLI Commands:**
+- `automobile-wordlist` - Generate wordlists
+- `automobile-wordlist-merge` - Merge wordlists
+
+### 2. Completion List Module (`completionlist/`)
+
+Preprocesses wordlists into completion files using trie analysis.
+
+**Key Features:**
+- Builds Node-based trie data structures
+- Computes frequency statistics via depth-first search
+- Determines auto-completion suggestions based on thresholds
+- Handles conflicting paths when merging (disables lower-weighted completions)
+
+**CLI Commands:**
+- `automobile-preprocess` - Generate completion lists
+- `automobile-preprocess-merge` - Merge completion lists
+
+**Key Functions:**
+- `build_completionlist()` - Main preprocessing function
+- `build_trie()` - Constructs Node trie from words
+- `dfs()` - Computes frequency statistics and determines completions
+- `Node.disable()` - Disables conflicting completion paths
+
+### 3. Engine Module (`engine/`)
+
+Core trie implementation for interactive autocomplete.
+
+**Key Features:**
+- **CoreTrie** - Base trie with:
+  - Character-by-character navigation
+  - Completion suffix storage
+  - Case-insensitive matching
+  - Control character handling (tab, backspace)
+  
+- **Trie** - Extended trie with:
+  - Terminal color formatting
+  - Real-time simulation
+  - Visual display of completions
+
+**Key Methods:**
+- `walk_to(text)` - Navigate through trie
+- `accept()` - Accept current completion
+- `from_file(path)` - Load from completion file
+- `from_words(*lines)` - Build from completion definitions
+
+### 4. Run Module (`run/`)
+
+Interactive command-line interface for real-time autocomplete.
+
+**Key Features:**
+- Inline gray text completions
+- Tab to accept, Backspace to delete
+- Real-time updates
+- Piped output support (writes to stdout when piped)
+
+**CLI Command:**
+- `automobile-cli` - Interactive autocomplete
+
+## File Formats
+
+### Wordlist Format
+
+```
+word #frequency
+another_word #12345
+word_without_freq
+```
+
+- `word #frequency` - Word with explicit frequency
+- `word` - Word with default frequency 1.0
+
+### Completion Format
+
+```
+prefix|completion #frequency
+pre|post #12345
+prefix|completion
+```
+
+- `prefix|completion #frequency` - Prefix, completion, and frequency
+- `prefix|completion` - Prefix and completion (default frequency 1.0)
 
 ## Technical Details
 
-The system uses a **trie (prefix tree)** data structure where:
+### Trie Data Structure
+
+The system uses a **trie (prefix tree)** where:
 - Each node represents a prefix
 - Shared prefixes share common nodes (efficient storage)
-- Frequency statistics are computed via depth-first search
-- Auto-completion is determined by frequency thresholds and ratios
-- The trie can be pruned to remove nodes without completions
+- Frequency statistics computed via depth-first search
+- Auto-completion determined by frequency thresholds and ratios
+- Nodes can be pruned to remove paths without completions
 
-Frequency analysis considers:
+### Frequency Analysis
+
+Completion selection considers:
 - **Word frequency**: How common an individual word is
 - **Subtree frequency**: Total probability mass in a subtree
 - **Ratio thresholds**: Ensures selected completions are significantly better than alternatives
 
+### Conflict Resolution
+
+When merging completion lists with conflicting paths (same prefix, different completions):
+- Higher-weighted completion is kept
+- Lower-weighted completion is disabled using `Node.disable()`
+- Disabled completions are cleared along the entire completion path
+
 This approach enables intelligent, context-aware autocomplete that adapts to word usage patterns.
 
+## Examples
+
+### Complete Workflow
+
+```bash
+# 1. Generate wordlist from wordfreq
+automobile-wordlist --output en.txt --lang en --max-words 100000
+
+# 2. Generate wordlist from corpus
+automobile-wordlist --output custom.txt --from-corpus documents/*.txt
+
+# 3. Merge wordlists
+automobile-wordlist-merge en.txt custom.txt --output merged.txt --weights 1.0 2.0
+
+# 4. Generate completion list
+automobile-preprocess merged.txt --output completions.txt
+
+# 5. Use interactive autocomplete
+automobile-cli completions.txt
+```
+
+### Advanced: Multiple Completion Lists
+
+```bash
+# Generate completions from different sources
+automobile-preprocess technical.txt --output tech_completions.txt
+automobile-preprocess general.txt --output gen_completions.txt
+
+# Merge with weights (technical completions get higher weight)
+automobile-preprocess-merge tech_completions.txt gen_completions.txt \
+    --output final.txt --weights 2.0 1.0
+
+# Use merged completions
+automobile-cli final.txt
+```
+
+## Development
+
+### Project Structure
+
+- `wordlist/` - Wordlist generation and merging (no dependencies on other modules)
+- `completionlist/` - Completion list generation (uses `wordlist.read`, uses `Node` not `CoreTrie`)
+- `engine/` - Trie engine for interactive use (independent module)
+- `run/` - CLI runner (uses `engine`)
+
+### Module Dependencies
+
+```
+wordlist (independent)
+  └── completionlist (uses wordlist.read)
+        └── engine (independent)
+              └── run (uses engine)
+```
+
+## License
+
+MIT License - see LICENSE file for details.
