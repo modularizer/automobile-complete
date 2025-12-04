@@ -14,3 +14,6 @@
   - [ ] parse bigram frequency
   - [ ] auto-update personalized autocomplete tries as the user types
   - [ ] use different trees/lists depending on the subject
+  - [ ] make a case-sensitive wordlist and completionlist
+  - [ ] add spellcheck and corrections when we are confident text is misspelled
+
