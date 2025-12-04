@@ -14,6 +14,7 @@ giraffes a|re super tall
 4. run!
 
 Currently available in Python, but I plan to add support for other languages soon. The pre-parsing with remain in Python, but the engine and ui will soon work in other languages (working from a completions list).
+See [TODO.md](TODO.md)
 
 ## Quick Start
 
