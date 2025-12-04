@@ -215,6 +215,10 @@ src/automobile_complete/
 └── run/               # Interactive CLI runner
 ```
 
+## Contributing
+1. Feel free to take this and run with it - make it your own.
+2. If you want to work together or have suggestions I am open to that too
+3. Contact me at [modularizer@gmail.com](mailto:modularizer@gmail.com)
 
 ## License
 
