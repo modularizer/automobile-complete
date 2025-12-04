@@ -7,7 +7,7 @@ Supports both absolute weights and relative weights based on percentiles.
 from pathlib import Path
 
 from automobile_complete.utils.typehints import Word, Freq
-from automobile_complete.wordlist.read import read_wordlist_file
+from automobile_complete.wordlist.read import read_wordlist_file, read_wordlist_file_with_weight
 
 
 def get_percentile_freq(wordlist: dict[Word, Freq], percentile: float) -> Freq:
@@ -30,51 +30,115 @@ def get_percentile_freq(wordlist: dict[Word, Freq], percentile: float) -> Freq:
     return freqs[index]
 
 
+def get_rank_freq(wordlist: dict[Word, Freq], rank: int) -> Freq:
+    """
+    Get the frequency at a given rank in a wordlist.
+    
+    Args:
+        wordlist: Dictionary mapping words to frequencies
+        rank: Rank (1-based, positive for highest to lowest, negative for lowest to highest)
+              e.g., 1 = highest, 2 = second highest, -1 = lowest, -2 = second lowest
+    
+    Returns:
+        Frequency value at the specified rank
+    """
+    if not wordlist:
+        return 1.0
+    
+    freqs = sorted(wordlist.values(), reverse=True)
+    
+    if rank > 0:
+        # Positive rank: 1 = highest, 2 = second highest, etc.
+        index = rank - 1
+        if index < 0:
+            index = 0
+        if index >= len(freqs):
+            index = len(freqs) - 1
+        return freqs[index]
+    elif rank < 0:
+        # Negative rank: -1 = lowest, -2 = second lowest, etc.
+        index = len(freqs) + rank  # rank is negative, so this subtracts
+        if index < 0:
+            index = 0
+        if index >= len(freqs):
+            index = len(freqs) - 1
+        return freqs[index]
+    else:
+        # rank == 0, invalid
+        raise ValueError("Rank cannot be 0. Use positive (e.g., #1) or negative (e.g., #-1) rank.")
+
+
 def calculate_weight(
     wordlist: dict[Word, Freq],
-    weight: float | dict[str, float],
+    weight: float | str,
     reference_wordlist: dict[Word, Freq] | None = None,
 ) -> float:
     """
     Calculate the actual weight multiplier for a wordlist.
     
     Args:
-        wordlist: The wordlist to calculate weight for
-        weight: Either a float (absolute weight) or a dict with:
-            - "percentile": percentile in this wordlist (0-100)
-            - "reference_percentile": percentile in reference wordlist (0-100)
-            - "reference_wordlist": index of reference wordlist (0-based)
-        reference_wordlist: Reference wordlist for relative weighting
+        wordlist: The wordlist to calculate weight for (custom/secondary list)
+        weight: Either:
+            - float: Absolute weight (multiply all frequencies by this)
+            - str ending with "%": Percentile-based relative weight (e.g., "50%")
+              Scales so that freq 1 in custom list = x percentile freq from reference list
+            - str starting with "#": Rank-based relative weight (e.g., "#5" or "#-1")
+              Scales so that freq 1 in custom list = rank N freq from reference list
+              Positive rank: #5 = 5th highest, #1 = highest
+              Negative rank: #-1 = lowest, #-2 = second lowest
+        reference_wordlist: Reference wordlist (first list) for relative weighting
     
     Returns:
         The calculated weight multiplier
     """
     if isinstance(weight, (int, float)):
-        # Absolute weight
+        # Absolute weight: multiply frequencies by this value
         return float(weight)
-    elif isinstance(weight, dict):
-        # Relative weight based on percentiles
+    elif isinstance(weight, str) and weight.endswith("%"):
+        # Percentile-based relative weight
         if reference_wordlist is None:
-            raise ValueError("Reference wordlist required for relative weighting")
+            raise ValueError("Reference wordlist required for percentile-based weighting")
         
-        this_percentile = weight.get("percentile", 50.0)
-        ref_percentile = weight.get("reference_percentile", 50.0)
+        try:
+            percentile = float(weight[:-1])
+        except ValueError:
+            raise ValueError(f"Invalid percentile format: {weight}")
         
-        this_freq = get_percentile_freq(wordlist, this_percentile)
-        ref_freq = get_percentile_freq(reference_wordlist, ref_percentile)
+        if percentile < 0 or percentile > 100:
+            raise ValueError(f"Percentile must be between 0 and 100, got {percentile}")
         
-        if this_freq == 0:
-            return 1.0
+        # Get the frequency at the specified percentile in the reference (first) list
+        ref_freq = get_percentile_freq(reference_wordlist, percentile)
         
-        # Scale so that this_percentile of this wordlist equals ref_percentile of reference
-        return ref_freq / this_freq
+        # Scale so that freq 1 in custom list = ref_freq
+        return ref_freq
+    elif isinstance(weight, str) and weight.startswith("#"):
+        # Rank-based relative weight
+        if reference_wordlist is None:
+            raise ValueError("Reference wordlist required for rank-based weighting")
+        
+        try:
+            rank = int(weight[1:])  # Remove the "#" prefix
+        except ValueError:
+            raise ValueError(f"Invalid rank format: {weight}. Use #N (e.g., #5) or #-N (e.g., #-1)")
+        
+        if rank == 0:
+            raise ValueError("Rank cannot be 0. Use positive (e.g., #1) or negative (e.g., #-1) rank.")
+        
+        # Get the frequency at the specified rank in the reference (first) list
+        ref_freq = get_rank_freq(reference_wordlist, rank)
+        
+        # Scale so that freq 1 in custom list = ref_freq
+        return ref_freq
     else:
-        raise ValueError(f"Invalid weight type: {type(weight)}")
+        raise ValueError(
+            f"Invalid weight type: {type(weight)}. Expected float, string ending with '%', or string starting with '#'."
+        )
 
 
 def merge_wordlists(
     wordlist_files: list[Path],
-    weights: list[float | dict[str, float]] | None = None,
+    weights: list[float | str] | None = None,
     output_file: Path | None = None,
     include_freqs: bool = True,
 ) -> list[str]:
@@ -99,30 +163,44 @@ def merge_wordlists(
     if not wordlist_files:
         raise ValueError("At least one wordlist file is required")
     
-    # Parse all wordlists (expand ~ in paths)
+    # Parse all wordlists and extract weights from files (expand ~ in paths)
     wordlists = []
+    file_weights = []
     for wordlist_file in wordlist_files:
         wordlist_file = Path(wordlist_file).expanduser()
         if not wordlist_file.exists():
             raise FileNotFoundError(f"Wordlist file not found: {wordlist_file}")
-        wordlists.append(read_wordlist_file(wordlist_file))
+        wordlist, file_weight = read_wordlist_file_with_weight(wordlist_file)
+        wordlists.append(wordlist)
+        file_weights.append(file_weight)
     
-    # Default weights to 1.0 for all
+    # Use file-based weights if present, otherwise use provided weights, otherwise default to 1.0
+    # File weights take highest priority
     if weights is None:
         weights = [1.0] * len(wordlists)
+    
+    # Override with file-based weights where present
+    final_weights = []
+    for i, (file_weight, arg_weight) in enumerate(zip(file_weights, weights)):
+        if file_weight is not None:
+            # File weight takes priority
+            final_weights.append(file_weight)
+        else:
+            # Use argument weight
+            final_weights.append(arg_weight)
+    
+    weights = final_weights
     
     if len(weights) != len(wordlists):
         raise ValueError(f"Number of weights ({len(weights)}) must match number of wordlists ({len(wordlists)})")
     
-    # Calculate actual weights (resolve relative weights)
+    # Calculate actual weights (resolve percentile-based and rank-based weights)
+    # First list is always the reference for relative weights
+    reference_wordlist = wordlists[0] if wordlists else None
     actual_weights = []
     for i, (wordlist, weight) in enumerate(zip(wordlists, weights)):
-        if isinstance(weight, dict):
-            # Relative weight - need reference wordlist
-            ref_index = weight.get("reference_index", 0)
-            if ref_index < 0 or ref_index >= len(wordlists):
-                raise ValueError(f"Invalid reference_index {ref_index} (must be 0-{len(wordlists)-1})")
-            reference_wordlist = wordlists[ref_index]
+        if isinstance(weight, str) and (weight.endswith("%") or weight.startswith("#")):
+            # Percentile-based or rank-based relative weight - use first list as reference
             actual_weight = calculate_weight(wordlist, weight, reference_wordlist)
         else:
             # Absolute weight

@@ -7,7 +7,7 @@ Handles conflicting paths by disabling lower-weighted completions.
 from pathlib import Path
 
 from automobile_complete.completionlist.node import Node
-from automobile_complete.completionlist.parse import parse_completion_file
+from automobile_complete.completionlist.parse import parse_completion_file, parse_completion_file_with_weight
 from automobile_complete.utils.typehints import Words
 from automobile_complete.wordlist.merge.merge import (
     calculate_weight,
@@ -16,7 +16,7 @@ from automobile_complete.wordlist.merge.merge import (
 
 def merge_completions(
     completion_files: list[Path],
-    weights: list[float | dict[str, float]] | None = None,
+    weights: list[float | str] | None = None,
     output_file: Path | None = None,
     include_freqs: bool = True,
 ) -> list[str]:
@@ -45,17 +45,33 @@ def merge_completions(
     if not completion_files:
         raise ValueError("At least one completion file is required")
     
-    # Parse all completion files (expand ~ in paths)
+    # Parse all completion files and extract weights from files (expand ~ in paths)
     all_completions = []
+    file_weights = []
     for completion_file in completion_files:
         completion_file = Path(completion_file).expanduser()
         if not completion_file.exists():
             raise FileNotFoundError(f"Completion file not found: {completion_file}")
-        all_completions.append(parse_completion_file(completion_file))
+        completions, file_weight = parse_completion_file_with_weight(completion_file)
+        all_completions.append(completions)
+        file_weights.append(file_weight)
     
-    # Default weights to 1.0 for all
+    # Use file-based weights if present, otherwise use provided weights, otherwise default to 1.0
+    # File weights take highest priority
     if weights is None:
         weights = [1.0] * len(all_completions)
+    
+    # Override with file-based weights where present
+    final_weights = []
+    for i, (file_weight, arg_weight) in enumerate(zip(file_weights, weights)):
+        if file_weight is not None:
+            # File weight takes priority
+            final_weights.append(file_weight)
+        else:
+            # Use argument weight
+            final_weights.append(arg_weight)
+    
+    weights = final_weights
     
     if len(weights) != len(all_completions):
         raise ValueError(
@@ -68,17 +84,13 @@ def merge_completions(
         freq_dict = {f"{pre}|{post}": freq for pre, post, freq in completions}
         freq_dicts.append(freq_dict)
     
-    # Calculate actual weights (resolve relative weights)
+    # Calculate actual weights (resolve percentile-based and rank-based weights)
+    # First file is always the reference for relative weights
+    reference_freq_dict = freq_dicts[0] if freq_dicts else None
     actual_weights = []
     for i, (freq_dict, weight) in enumerate(zip(freq_dicts, weights)):
-        if isinstance(weight, dict):
-            # Relative weight - need reference file
-            ref_index = weight.get("reference_index", 0)
-            if ref_index < 0 or ref_index >= len(freq_dicts):
-                raise ValueError(
-                    f"Invalid reference_index {ref_index} (must be 0-{len(freq_dicts)-1})"
-                )
-            reference_freq_dict = freq_dicts[ref_index]
+        if isinstance(weight, str) and (weight.endswith("%") or weight.startswith("#")):
+            # Percentile-based or rank-based relative weight - use first file as reference
             actual_weight = calculate_weight(freq_dict, weight, reference_freq_dict)
         else:
             # Absolute weight

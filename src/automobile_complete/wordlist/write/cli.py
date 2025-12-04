@@ -5,14 +5,13 @@ Command-line interface for wordlist generation.
 import argparse
 from pathlib import Path
 
-from automobile_complete.utils.env import load_env_sample, load_env, get_env, get_env_bool, get_env_int, get_env_float
+from automobile_complete.utils.env import env
 from automobile_complete.wordlist.write.corpus import generate_corpus_wordlist
 from automobile_complete.wordlist.write.wordfreq import generate_wordfreq_wordlist
 
 
 def main():
-    # Load .env.sample first (single source of truth for defaults)
-    load_env_sample()
+    # Environment variables are automatically loaded by env object
     """
     Command-line interface for converting wordfreq wordlists to word #freq format.
     """
@@ -35,8 +34,8 @@ Examples:
     parser.add_argument(
         "-o", "--output",
         type=str,
-        default=get_env("AMC_WORDLIST_FILE"),
-        help=f"Output file path. Default from .env.sample: {get_env('AMC_WORDLIST_FILE') or '(not set)'}"
+        default=env.get_as("AMC_WORDLIST_DST", "path_str"),
+        help=f"Output file path. Default from .env.sample: {env.get_as('AMC_WORDLIST_DST', 'path_str') or '(not set)'}"
     )
     
     # Method selection
@@ -52,29 +51,29 @@ Examples:
     parser.add_argument(
         "-l", "--lang",
         type=str,
-        default=get_env("AMC_WORDLIST_LANG"),
-        help=f"Language code for wordfreq wordlist (e.g., 'en', 'es', 'fr'). Default from .env.sample: {get_env('AMC_WORDLIST_LANG') or '(not set)'}"
+        default=env.get_as("AMC_WORDLIST_LANG", str),
+        help=f"Language code for wordfreq wordlist (e.g., 'en', 'es', 'fr'). Default from .env.sample: {env.get_as('AMC_WORDLIST_LANG', str) or '(not set)'}"
     )
     
     parser.add_argument(
         "--pattern",
         type=str,
-        default=get_env("AMC_WORDLIST_PATTERN"),
-        help=f"Regex pattern to filter words. Default from .env.sample: {get_env('AMC_WORDLIST_PATTERN') or '(not set)'}"
+        default=env.get_as("AMC_WORDLIST_PATTERN", str),
+        help=f"Regex pattern to filter words. Default from .env.sample: {env.get_as('AMC_WORDLIST_PATTERN', str) or '(not set)'}"
     )
     
     parser.add_argument(
         "--max-words",
         type=int,
-        default=get_env_int("AMC_WORDLIST_MAX_WORDS"),
-        help=f"Maximum number of words to include. Default from .env.sample: {get_env('AMC_WORDLIST_MAX_WORDS') or '(all matching words)'}"
+        default=env.get_as("AMC_WORDLIST_MAX_WORDS", int),
+        help=f"Maximum number of words to include. Default from .env.sample: {env.get_as('AMC_WORDLIST_MAX_WORDS', int) or '(all matching words)'}"
     )
     
     parser.add_argument(
         "--min-length",
         type=int,
-        default=get_env_int("AMC_WORDLIST_MIN_LENGTH", 2),
-        help=f"Minimum word length (in characters). Default from .env.sample: {get_env('AMC_WORDLIST_MIN_LENGTH') or '2'}"
+        default=env.get_as("AMC_WORDLIST_MIN_LENGTH", int, 2),
+        help=f"Minimum word length (in characters). Default from .env.sample: {env.get_as('AMC_WORDLIST_MIN_LENGTH', int, 2) or '2'}"
     )
     
     parser.add_argument(
@@ -92,25 +91,22 @@ Examples:
     
     args = parser.parse_args()
     
-    # Load .env or --env-file (overrides .env.sample)
-    load_env(env_file=Path(args.env_file).expanduser() if args.env_file else None)
-    
-    # Re-check defaults after loading .env (in case user wants to override via .env)
+    # Re-check defaults (env object already loaded everything)
     if not args.output:
-        args.output = get_env("AMC_WORDLIST_FILE")
+        args.output = env.get_as("AMC_WORDLIST_DST", "path_str")
     if not args.lang:
-        args.lang = get_env("AMC_WORDLIST_LANG")
+        args.lang = env.get_as("AMC_WORDLIST_LANG", str)
     if not args.pattern:
-        args.pattern = get_env("AMC_WORDLIST_PATTERN")
+        args.pattern = env.get_as("AMC_WORDLIST_PATTERN", str)
     if args.max_words is None:
-        args.max_words = get_env_int("AMC_WORDLIST_MAX_WORDS")
+        args.max_words = env.get_as("AMC_WORDLIST_MAX_WORDS", int)
     if args.min_length is None:
-        args.min_length = get_env_int("AMC_WORDLIST_MIN_LENGTH", 2)
+        args.min_length = env.get_as("AMC_WORDLIST_MIN_LENGTH", int, 2)
     
     # Generate wordlist based on method
     # Check env var for --no-freqs if flag not set
     if not args.no_freqs:
-        args.no_freqs = get_env_bool("AMC_WORDLIST_NO_FREQS", False)
+        args.no_freqs = env.get_as("AMC_WORDLIST_NO_FREQS", bool, False)
     include_freqs = not args.no_freqs
     
     if args.from_corpus:

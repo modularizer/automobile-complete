@@ -1,0 +1,14 @@
+# Include assets directory with pre-generated wordlists and completion lists
+include assets/*
+recursive-include assets *.txt
+
+# Include .env.sample for configuration reference
+include .env.sample
+
+# Include README and UNLICENSE
+include README.md
+include UNLICENSE
+
+# Include any other documentation
+recursive-include docs *
+

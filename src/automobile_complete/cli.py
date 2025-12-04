@@ -14,6 +14,54 @@ from automobile_complete.completionlist.merge.cli import main as preprocess_merg
 from automobile_complete.run.cli import main as run_main
 
 
+def setup_main():
+    """
+    Run the complete setup pipeline:
+    1. Generate wordlist (amcw)
+    2. Merge wordlists (amcmw)
+    3. Generate completionlist (amcc)
+    4. Merge completionlists (amcmc)
+    """
+    import sys
+    
+    steps = [
+        ("Generating wordlist", wordlist_main),
+        ("Merging wordlists", wordlist_merge_main),
+        ("Generating completionlist", preprocess_main),
+        ("Merging completionlists", preprocess_merge_main),
+    ]
+    
+    print("Running setup pipeline...", file=sys.stderr)
+    print("=" * 60, file=sys.stderr)
+    
+    for step_name, step_func in steps:
+        print(f"\n[{step_name}]", file=sys.stderr)
+        print("-" * 60, file=sys.stderr)
+        try:
+            # Save original argv
+            original_argv = sys.argv.copy()
+            # Set argv to just the script name (each main() expects to parse its own args)
+            sys.argv = [sys.argv[0]]
+            step_func()
+            # Restore original argv
+            sys.argv = original_argv
+        except SystemExit as e:
+            # argparse raises SystemExit on errors or --help
+            if e.code != 0:
+                print(f"\n❌ Error in step '{step_name}': {e}", file=sys.stderr)
+                sys.exit(e.code)
+            # If code is 0, it was --help, which we'll allow
+            sys.exit(0)
+        except Exception as e:
+            print(f"\n❌ Error in step '{step_name}': {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    
+    print("\n" + "=" * 60, file=sys.stderr)
+    print("✅ Setup complete!", file=sys.stderr)
+
+
 def main():
     """
     Unified CLI dispatcher.
@@ -36,6 +84,7 @@ def main():
         'c': preprocess_main,  # 'c' for completionlist
         'preprocess-merge': preprocess_merge_main,
         'cm': preprocess_merge_main,  # 'cm' for completionlist-merge
+        'setup': setup_main,
         'run': run_main,
         'r': run_main,
     }
@@ -78,6 +127,7 @@ Commands:
     wordlist-merge, wm    Merge multiple wordlist files with weights
     preprocess, c         Preprocess wordlist into completion list (prefix|completion format)
     preprocess-merge, cm  Merge multiple completion lists with conflict resolution
+    setup                 Run complete setup pipeline (w -> wm -> c -> cm)
     run, r                Interactive autocomplete CLI (default if no command specified)
 
 Examples:
@@ -96,6 +146,9 @@ Examples:
     # Merge completion lists
     amc preprocess-merge comp1.txt comp2.txt --output merged.txt
     amc cm comp1.txt comp2.txt --output merged.txt
+    
+    # Run complete setup pipeline
+    amc setup
     
     # Interactive autocomplete (default)
     amc completions.txt

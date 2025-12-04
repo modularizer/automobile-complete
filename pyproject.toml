@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "An intelligent autocomplete system with frequency-based trie data structures"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {text = "MIT"}
+license = {text = "Unlicense"}
 authors = [
     {name = "Torin Halsted", email = "modularizer@gmail.com"},
 ]
@@ -16,7 +16,7 @@ keywords = ["autocomplete", "trie", "text-completion", "cli"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: Public Domain",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -40,6 +40,7 @@ dev = [
 
 [project.scripts]
 amc = "automobile_complete.cli:main"
+amc-validate-env = "automobile_complete.utils.validate_env:main"
 amcc = "automobile_complete.completionlist.cli:main"
 amcmc = "automobile_complete.completionlist.merge.cli:main"
 amcw = "automobile_complete.wordlist.write.cli:main"
@@ -55,6 +56,9 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["assets/*.txt", ".env.sample"]
 
 [tool.black]
 line-length = 100

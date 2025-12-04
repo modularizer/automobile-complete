@@ -1,0 +1,65 @@
+reac|t native
+py|thon
+postg|res
+ja|va
+javas|cript
+types|cript
+flu|tter
+dev|elopment
+dev en|vironment
+development e|nvironment
+pro|duction
+freem|ium
+node|.js
+fasta|pi
+jsons|chema
+busi|ness
+business i|dea
+business v|enture
+software dev|elopment
+software dep|loyment
+docker c|ontainer
+docker i|mage
+dev s|erver
+software e|ngineer
+app s|tore
+build p|rocess
+startup i|dea
+sk|unkpad
+skunkpad is r|eally cool
+peanut b|utter
+peanut butter s|andwich
+peanut butter a|nd jelly
+peanut butter and jelly s|andwich
+ham a|nd cheese
+target a|udience
+qr c|ode
+com|petitors
+competit|ion
+fre|quent
+frequently a|sked questions
+public d|atabase
+large l|anguage model
+arti|ficial intelligence
+chatg|pt
+real e|state
+full s|tack
+social n|etwork
+shipping a|ddress
+publicly a|ccessible
+user in|terface
+user ex|perience
+cloud se|rver
+cloud co|mputing
+neural n|etwork
+api e|ndpoint
+continuous in|tegration
+automated t|esting
+package ma|nager
+design pa|tterns
+bug tr|acking
+bug re|porting
+code re|view
+pull re|quest
+database mi|gration
+request ro|uting

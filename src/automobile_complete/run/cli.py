@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Literal, Any
 
 from automobile_complete.engine import Trie
-from automobile_complete.utils.env import load_env_sample, load_env, get_env, get_env_bool
+from automobile_complete.utils.env import env
 from automobile_complete.utils.chars import BACKSPACE, TAB, CTRL_D_ORD, CTRL_C_ORD, BACKSPACE_ORD, CARRIAGE_RETURN
 from automobile_complete.utils.colors import RESET, REPLACE_LINE, GRAY, ESC
 
@@ -293,10 +293,9 @@ Examples:
         """
     )
     
-    # Load .env.sample first (single source of truth for defaults)
-    load_env_sample()
+    # Environment variables are automatically loaded by env object
     
-    default_completion_file = get_env("AMC_COMPLETIONLIST_FILE")
+    default_completion_file = env.get_as("AMC_SRC", "path_str")
     parser.add_argument(
         "completion_files",
         type=str,
@@ -308,7 +307,15 @@ Examples:
     parser.add_argument(
         "-n", "--noisy",
         action="store_true",
-        help=f"Enable verbose output (show loading messages, etc.). Default from .env.sample: {get_env('AMC_RUN_NOISY') or 'false'}"
+        help=f"Enable verbose output (show loading messages, etc.). Default from .env.sample: {env.get_as('AMC_RUN_NOISY', bool, False) or 'false'}"
+    )
+    
+    default_placeholder = env.get_as("AMC_RUN_PLACEHOLDER", str, "Start typing to test the auto-complete...")
+    parser.add_argument(
+        "--placeholder",
+        type=str,
+        default=default_placeholder,
+        help=f"Placeholder text to show before typing. Default from .env.sample: {default_placeholder}"
     )
     
     parser.add_argument(
@@ -320,22 +327,24 @@ Examples:
     
     args = parser.parse_args()
     
-    # Load .env or --env-file (overrides .env.sample)
-    load_env(env_file=Path(args.env_file).expanduser() if args.env_file else None)
-    
     # Detect if stdout is being piped
     is_piped = not sys.stdout.isatty()
     # When piped, send noisy messages to stderr
     noisy_stream = sys.stderr if is_piped else sys.stdout
     
     # Load trie from completion file(s)
-    # Re-check defaults after loading .env (in case user wants to override via .env)
-    default_completion_file = get_env("AMC_COMPLETIONLIST_FILE")
+    # Re-check defaults (env object already loaded everything)
+    default_completion_file = env.get_as("AMC_SRC", "path_str")
     completion_files = args.completion_files if args.completion_files else ([default_completion_file] if default_completion_file else [])
     
     # Check env var for --noisy if flag not set
     if not args.noisy:
-        args.noisy = get_env_bool("AMC_RUN_NOISY", False)
+        args.noisy = env.get_as("AMC_RUN_NOISY", bool, False)
+    
+    # Check env var for --placeholder if not set via CLI
+    if args.placeholder == default_placeholder:
+        # Re-check in case .env was loaded
+        args.placeholder = env.get_as("AMC_RUN_PLACEHOLDER", str, "Start typing to test the auto-complete...")
     
     if args.noisy:
         print(f"Loading trie from {len(completion_files)} file(s): {', '.join(completion_files)}", file=noisy_stream)
@@ -354,7 +363,7 @@ Examples:
     t1 = time.perf_counter()
     if args.noisy:
         print(f"Loaded trie with {len(trie.root.words)} words in {(t1 - t0):.3f}s\n", file=noisy_stream)
-    interactive_demo(trie, noisy=args.noisy)
+    interactive_demo(trie, noisy=args.noisy, placeholder=args.placeholder)
 
 
 
