@@ -189,7 +189,7 @@ class CoreTrie:
         Args:
             full_text: New full text value. If None, uses current full_text.
             parent: New parent node. If None, uses current parent.
-        
+
         Returns:
             A new CoreTrie node with the same completion and children as this node.
         """
@@ -227,7 +227,6 @@ class CoreTrie:
             elif handle_control_characters and ch == "\t":
                 c: str = node.completion  # Get completion suffix
                 s += c  # Add completion to full text
-                n: int = len(c)  # Length of accepted completion
                 # Recursively walk through the completion string
                 node = node.walk_to(c, handle_control_characters=handle_control_characters)
             # Handle normal characters
@@ -295,6 +294,9 @@ class CoreTrie:
         return not self.is_alpha(ch) and not self.is_control_character(ch)
 
     def insert(self, text: str) -> "CoreTrie":
+        ci = self.case_insensitive
+        if ci:
+            text = text.lower()
         for line in text.splitlines():
             line = line.strip()
             if not line:
@@ -317,13 +319,11 @@ class CoreTrie:
         node = self
         root = self.root
         T = type(self)
-        ci = self.case_insensitive
-        pre = pre.lower() if ci else pre
-        post = post.lower() if ci else post
 
         for ch in pre:
-            child = node.children.get(ch)
-            if child is None:
+            if ch in node.children:
+                child = node.children[ch]
+            else:
                 # very lightweight child creation, see #2
                 child = T(
                     completion="",
