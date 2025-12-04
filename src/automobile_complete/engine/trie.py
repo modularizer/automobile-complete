@@ -13,8 +13,8 @@ The trie structure enables efficient prefix-based word lookup and completion,
 with support for displaying completion suggestions in a user-friendly format.
 """
 from automobile_complete.engine.core_trie import CoreTrie
-from automobile_complete.utils.chars import CARRIAGE_RETURN, BACKSPACE, TAB
-from automobile_complete.utils.colors import RESET, DARK_GREY, GRAY2
+from automobile_complete.utils.terminal import CARRIAGE_RETURN, BACKSPACE, TAB
+
 
 
 class Trie(CoreTrie):

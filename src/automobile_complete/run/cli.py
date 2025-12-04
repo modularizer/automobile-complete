@@ -11,6 +11,7 @@ Features:
 - Real-time updates as you type
 """
 import argparse
+import contextlib
 import sys
 import termios
 import time
@@ -20,8 +21,9 @@ from typing import Literal, Any
 
 from automobile_complete.engine import Trie
 from automobile_complete.utils.env import env
-from automobile_complete.utils.chars import BACKSPACE, TAB, CTRL_D_ORD, CTRL_C_ORD, BACKSPACE_ORD, CARRIAGE_RETURN
-from automobile_complete.utils.colors import RESET, REPLACE_LINE, GRAY, ESC
+from automobile_complete.utils.terminal import BACKSPACE, TAB, CARRIAGE_RETURN, \
+    CLEAR_LINE, ESC, print_with_suggestion, BACKSPACE2, CTRL
+from automobile_complete.utils.terminal import RESET, GRAY
 
 
 def get_char():
@@ -60,45 +62,8 @@ def get_char():
         return sys.stdin.read(1) if sys.stdin.readable() else None
 
 
-def format_with_completion(text: str, completion: str) -> str:
-    """
-    Format text with completion shown in light gray.
-    
-    Args:
-        text: Full text that has been typed
-        completion: Completion suggestion to show in gray
-    
-    Returns:
-        Formatted string with ANSI codes (text + gray completion)
-    """
-    # ANSI color codes
-
-    
-    # Clean text (remove control characters for display)
-    display_text = text.replace(TAB, "").replace(BACKSPACE, "")
-    
-    # Format completion in gray if available
-    if completion:
-        formatted_completion = f"{GRAY}{completion}{RESET}"
-    else:
-        formatted_completion = ""
-    
-    # Return: typed text + gray completion (no clearing, no cursor)
-    return f"{display_text}{formatted_completion}"
 
 
-def format_text_only(text: str) -> str:
-    """
-    Format just the text without completion.
-    
-    Args:
-        text: Full text that has been typed
-    
-    Returns:
-        Clean text string
-    """
-    # Clean text (remove control characters for display)
-    return text.replace(TAB, "").replace(BACKSPACE, "")
 
 
 def interactive_demo(trie: Trie,
@@ -122,56 +87,42 @@ def interactive_demo(trie: Trie,
     """
     # Detect if stdout is being piped
     is_piped = not sys.stdout.isatty()
-
-    # Use /dev/tty (controlling terminal) for intermediate display if available,
-    # otherwise fall back to stderr. This ensures display works even when stdout is piped.
-    display_stream_opened = False
+    display_stream_opened = display_stream == "/dev/tty"
     display_stream = open('/dev/tty', 'w') if display_stream == "/dev/tty" else sys.stderr if display_stream == "stderr" else sys.stdout if display_stream == "stdout" else display_stream
 
-    # Helper function to safely print to display stream
-    def safe_print(*args, **kwargs):
-        print(*args, file=display_stream, **kwargs)
+    def log(m="", **kw):
+        if noisy:
+            print(m, file=display_stream, **kw)
 
 
-    if noisy:
-        safe_print("Interactive Autocomplete Demo")
-        safe_print("=" * 50)
-        safe_print("Features:")
-        safe_print("  - Completions show in light gray after cursor")
-        safe_print("  - Press Tab to accept the completion")
-        safe_print("  - Press Backspace to delete")
-        safe_print("  - Press Ctrl+C to exit")
-        safe_print("=" * 50)
-        safe_print()
+    log("Interactive Autocomplete Demo")
+    log("=" * 50)
+    log("Features:")
+    log("  - Completions show in light gray after cursor")
+    log("  - Press Tab to accept the completion")
+    log("  - Press Backspace to delete")
+    log("  - Press Ctrl+C to exit")
+    log("=" * 50)
+    log()
     
     # Initialize state - start at root
     current_node = trie
     has_typed = False
-    safe_print(f"{GRAY}{placeholder}{RESET}" if placeholder else "", end=CARRIAGE_RETURN)
-    
+    print(f"{GRAY}{placeholder}{RESET}" if placeholder else "", end=CARRIAGE_RETURN, file=display_stream)
+
+    recording = ""
     try:
         while True:
             # Get current state from trie (it tracks full_text internally)
             full_text = current_node.full_text or ""
             completion = current_node.completion or ""
 
-
-
-            # Display using two-step approach to show completion after cursor:
-            # 1. Print line WITH completion (moves cursor to end of completion)
-            # 2. Print line WITHOUT completion (moves cursor back to end of text, but gray text remains)
-            if completion:
-                # Clear line first to remove any old characters
-                formatted_with = format_with_completion(full_text, completion)
-
-                safe_print(f"{REPLACE_LINE}{formatted_with}", end="", flush=True)
-                # Step 2: Print without completion (don't clear - gray text stays visible)
-                formatted_without = format_text_only(full_text)
-                safe_print(f"{CARRIAGE_RETURN}{formatted_without}", end="", flush=True)
+            # print
+            if full_text:
+                print_with_suggestion(full_text, completion, file=display_stream, print = print)
             elif has_typed:
-                # No completion, just print the text
-                formatted = format_text_only(full_text)
-                safe_print(f"{REPLACE_LINE}{formatted}", end="", flush=True)
+                print_with_suggestion("", placeholder, file=display_stream, print = print)
+
             # Read a character
             ch = get_char()
 
@@ -180,91 +131,56 @@ def interactive_demo(trie: Trie,
 
             if not has_typed:
                 has_typed = True
+            recording += ch
 
 
             # Handle special characters
-            if ord(ch) == CTRL_C_ORD:  # Ctrl+C
-                if noisy:
-                    safe_print("\n\nExiting...")
-                break
-            elif ord(ch) == CTRL_D_ORD:  # Ctrl+D (EOF)
-                if noisy:
-                    safe_print("\n\nExiting...")
+            if (ch in [CTRL.C, CTRL.D, CTRL.X, CTRL.Q, CTRL["["]]) or ((ch == CARRIAGE_RETURN or ch == '\n') and not current_node.esc):  # Ctrl+D (EOF)
+                current_node.full_text += "\n"
+                full_text += "\n"
+                print_with_suggestion(full_text, "", file=display_stream, print = print)
+                log("\n\nExiting...")
                 break
             elif ch == TAB:  # Tab - accept completion
-                if completion:
+                if completion and not current_node.esc:
                     # Accept the completion
                     current_node = current_node.accept()
-                    # Show just the accepted text in normal color (no completion)
-                    full_text = current_node.full_text or ""
-                    formatted = format_text_only(full_text)
-                    safe_print(f"{REPLACE_LINE}{formatted}", end="", flush=True)
-                continue
-            elif ch == BACKSPACE or ord(ch) == BACKSPACE_ORD:  # Backspace
-                # Use trie's built-in backspace handling via walk_to
-                current_node = current_node.walk_to(BACKSPACE)
-                continue
-            elif ch == CARRIAGE_RETURN or ch == '\n':  # Regular Enter - exit
-                # Accept current completion if any
-                if completion:
-                    current_node = current_node.accept()
-                    full_text = current_node.full_text or ""
-                # Clear line, print final text to display stream, then newline before exiting
-                safe_print(f"{REPLACE_LINE}{full_text}")  # Clear to end, print text, newline
-                break
-            elif ch.startswith(ESC) and ('13;2' in ch or 'OM' in ch):  # Shift+Enter (escape sequence)
-                # Shift+Enter detected - insert newline instead of exiting
-                # Note: Shift+Enter detection works on most modern terminals but may vary
-                # Accept current completion if any, then newline
-                if completion:
-                    current_node = current_node.accept()
-                    full_text = current_node.full_text or ""
-                # Clear line and print final text, then newline
-                safe_print(f"{REPLACE_LINE}{full_text}")  # Clear to end, print text, newline
-                # Reset to root for new line
-                current_node = trie
-                continue
-            else:
-                # Regular character - use walk_to (same as .sim())
+                else:
+                    current_node = current_node.walk_to("    ")
+            elif (ch == CARRIAGE_RETURN or ch == '\n') and current_node.esc:
+                current_node = current_node.walk_to("\n")
+            else: # regular character
                 current_node = current_node.walk_to(ch)
     except KeyboardInterrupt:
-        if noisy:
-            safe_print("\n\nExiting...")
+        log("\n\nExiting...")
     except BrokenPipeError:
-        # Handle broken pipe gracefully when stdout is closed
-        pass
+        log("\n\nBroken Pipe")
     except Exception as e:
-        safe_print(f"\n\nError: {e}")
         import traceback
-        traceback.print_exc(file=display_stream)
+        log(f"\n\nError: {e}\n{str(traceback.format_exc())}")
     finally:
         # Write final result to stdout (only when piped, otherwise it's already there)
         final_text = current_node.full_text or ""
         if not final_text.endswith("\n"):
             final_text += "\n"
         if is_piped:
-            try:
+            with contextlib.suppress(BrokenPipeError):
                 print(final_text, file=sys.stdout, flush=True)
-            except BrokenPipeError:
-                # If stdout is closed, just ignore
-                pass
-            finally:
-                # Close stdout and stderr to prevent Python from trying to flush them
-                # during shutdown, which causes "Exception ignored" messages
-                try:
-                    sys.stdout.close()
-                except (BrokenPipeError, OSError):
-                    pass
-                try:
-                    sys.stderr.close()
-                except (BrokenPipeError, OSError):
-                    pass
+            # Close stdout and stderr to prevent Python from trying to flush them
+            # during shutdown, which causes "Exception ignored" messages
+            with contextlib.suppress(BrokenPipeError, OSError):
+                sys.stdout.close()
+            with contextlib.suppress(BrokenPipeError, OSError):
+                sys.stderr.close()
         # Close display stream if we opened /dev/tty
         if display_stream_opened:
-            try:
+            with contextlib.suppress(BrokenPipeError, OSError):
                 display_stream.close()
-            except (BrokenPipeError, OSError):
-                pass
+
+        # print("=========================")
+        # print("recording")
+        # print("=========================")
+        # print("|".join(ch for ch in recording).encode('unicode_escape').decode())
         return final_text
 
 

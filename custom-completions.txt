@@ -72,3 +72,7 @@ hip|po
 hippo|potamuses
 hippos a|re fat
 hippopotamuses a|re fat
+testing1|23
+abcd|efghijklmnopqrstuvwxyz
+12|345
+3.141|59265358979323846264338327950288419716939937510

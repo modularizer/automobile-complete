@@ -16,7 +16,7 @@ with support for displaying completion suggestions in a user-friendly format.
 import re
 from pathlib import Path
 
-from automobile_complete.utils.chars import BACKSPACE, TAB
+from automobile_complete.utils.terminal import BACKSPACE, TAB, BACKSPACE2
 
 FINALE_PART = re.compile(r"[A-Za-z0-9']+$")
 
@@ -91,6 +91,7 @@ class CoreTrie:
                  parent: "CoreTrie" = None,
                  prefix: str = "",
                  full_text: str = "",
+                 esc = False,
                  **config
                  ) -> None:
         """
@@ -129,6 +130,7 @@ class CoreTrie:
             self.counter = 0
         # Cache full text only if enabled in config
         self.full_text = full_text
+        self.esc = esc
 
     @property
     def cache_full_text(self) -> bool:
@@ -183,7 +185,9 @@ class CoreTrie:
         Returns:
             A new CoreTrie node that is a child of this node.
         """
-        return type(self)(completion=completion, children=children, parent=self, prefix=self.prefix + text, full_text=self.full_text + text,
+        return type(self)(completion=completion, children=children, parent=self,
+                          prefix=self.prefix + text, full_text=self.full_text + text,
+                          esc=self.esc,
                           **self.config)
 
     def clone(self, full_text: str = None, parent=None) -> "CoreTrie":
@@ -197,8 +201,14 @@ class CoreTrie:
         Returns:
             A new CoreTrie node with the same completion and children as this node.
         """
-        return type(self)(completion=self.completion, children=self.children, parent=parent if parent is not None else self, prefix=self.prefix, full_text=full_text if full_text is not None else self.full_text,
+        return type(self)(completion=self.completion, children=self.children,
+                          parent=parent if parent is not None else self, prefix=self.prefix,
+                          full_text=full_text if full_text is not None else self.full_text,
+                          esc=self.esc,
                           **self.config)
+
+    def shift_tab(self):
+        return self.walk_to("\t", handle_control_characters=False)
 
     def walk_to(self, v: str, *, handle_control_characters: bool | None = None) -> "CoreTrie":
         """
@@ -220,15 +230,32 @@ class CoreTrie:
         ci: bool = self.case_insensitive  # Case-insensitive flag
         node: "CoreTrie" = self  # Current node (starts at self)
         s: str = self.full_text  # Accumulated full text
-        for ch in v:
+
+        # convert \x7f to \b
+        v = v.replace(BACKSPACE2, BACKSPACE)
+
+        if v:
+            o0 = ord(v[0])
+            if o0 not in [ord("\t"), ord("\n"), ord("\b")] and 1 < o0 < 32:
+                # ignore all control characters like Ctrl+C, etc
+                return self
+        for i, ch in enumerate(v):
+            o = ord(ch)
+            if o == 0:
+                node.esc = not node.esc
+            if o not in [ord("\t"), ord("\n"), ord("\b")] and o < 32:
+                # ignore all control characters like Ctrl+C, etc
+                continue
             # Handle backspace character: delete last character and move to parent
-            if handle_control_characters and ch == BACKSPACE  and BACKSPACE not in node.children:
+            if ch == BACKSPACE and ch not in node.children:
                 s = s[:-1]  # Remove last character from full text
                 m = re.search(FINALE_PART, s)
                 prefix = m.group(0) if m else ""
+                esc = node.esc
                 node = node.root.clone(s).walk_to(prefix)
+                node.esc = esc
             # Handle tab character: accept completion and navigate to it
-            elif handle_control_characters and ch == TAB:
+            elif handle_control_characters and not node.esc and ch == TAB and node.completion:
                 c: str = node.completion  # Get completion suffix
                 s += c  # Add completion to full text
                 # Recursively walk through the completion string
@@ -247,6 +274,9 @@ class CoreTrie:
                         # Create new child node if it doesn't exist
                         nn = node.child(ch)
                 node = nn  # Move to child node
+
+            if ch in ["\n", "\t"] and node.esc:
+                node.esc = False
 
             # Reset to root if we hit an empty node and a reset character
             # (Reset characters are non-alphabetic, non-control characters like space, punctuation)
@@ -281,7 +311,7 @@ class CoreTrie:
         """
         if not self.handle_control_characters:
             return False
-        return ch in f"{TAB}{BACKSPACE}"
+        return ch in [TAB, BACKSPACE, BACKSPACE2]
 
     def is_reset_char(self, ch: str) -> bool:
         """
