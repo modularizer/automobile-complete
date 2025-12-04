@@ -10,3 +10,7 @@
   - [ ] Dart
 - [ ] make a React Native ui text controller demo
 - [ ] publish a React Native solution for adding into an app
+- [ ] make better features
+  - [ ] parse bigram frequency
+  - [ ] auto-update personalized autocomplete tries as the user types
+  - [ ] use different trees/lists depending on the subject
