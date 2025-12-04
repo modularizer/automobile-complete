@@ -63,3 +63,12 @@ code re|view
 pull re|quest
 database mi|gration
 request ro|uting
+anim|als
+enor|mous
+for e|xample:
+gir|affes
+giraffes a|re super tall
+hip|po
+hippo|potamuses
+hippos a|re fat
+hippopotamuses a|re fat
