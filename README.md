@@ -1,6 +1,19 @@
 # Automobile Complete
 
-An intelligent autocomplete system that builds frequency-based trie data structures from language wordlists and provides an interactive command-line interface for text completion.
+![demo.gif](docs/demo.gif)
+
+Build your own **fast and dumb** offline autocomplete from a hardcoded wordlist.
+
+1. Use our prebuilt word frequency list pulled from https://github.com/rspeer/wordfreq
+2. Parse into a simple text format
+3. Hardcode your own completions
+```commandline
+gir|affes
+giraffes a|re super tall
+```
+4. run!
+
+Currently available in Python, but I plan to add support for other languages soon. The pre-parsing with remain in Python, but the engine and ui will soon work in other languages (working from a completions list).
 
 ## Quick Start
 
@@ -41,6 +54,44 @@ Run `amc setup` if you've:
 - Changed any configuration
 
 This will regenerate wordlists and completion lists with your customizations.
+
+
+### Console
+Try running [demo.py](demo.py) in your console!
+```python
+from automobile_complete import Trie
+
+if __name__ == "__main__":
+    t = Trie.from_file("assets/merged-completionlist.txt")
+    x = t.gira
+    print(x)
+```
+
+![console.png](docs/console.png)
+
+
+### Console Typing Simulator
+Try running `Trie.demo()` in your console
+```python
+from automobile_complete import Trie
+
+if __name__ == "__main__":
+    # the following is the same as Trie.demo()
+    t = Trie.from_words("""
+anim|als
+enor|mous
+for e|xample:
+gir|affes
+giraffes a|re super tall
+hip|po
+hippo|potamuses
+hippos a|re fat
+hippopotamuses a|re fat
+    """, cache_full_text=True)
+    t.sim("Animals can be enormo\t. For example: gira\t\b\bes are super super tall and hippos are fat",
+          # disappearing=False
+          )
+```
 
 ### Customization
 
