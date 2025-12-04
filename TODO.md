@@ -1,0 +1,12 @@
+- [ ] separate the dev section (e.g. `amc setup` from the run)
+  - the engine and cli need less dependencies, etc. if you are not looking to customize
+- [ ] publish to pip
+- [ ] separate env parsing into own repo/package
+- [ ] make a function comparable to `input` for using IN python
+- [ ] make the engine for other languages
+  - [ ] Typescript
+  - [ ] Javascript
+  - [ ] Bash?
+  - [ ] Dart
+- [ ] make a React Native ui text controller demo
+- [ ] publish a React Native solution for adding into an app
