@@ -16,4 +16,10 @@
   - [ ] use different trees/lists depending on the subject
   - [ ] make a case-sensitive wordlist and completionlist
   - [ ] add spellcheck and corrections when we are confident text is misspelled
-
+- [ ] test the corpus loading and add corpus sources
+  - [ ] generate from wikipedia
+  - [ ] generate from a book
+  - [ ] handle bigrams and more
+- [ ] explore just doing the standard trie auto-complete instead of the hardcoded, or maybe a combo
+  - [ ] hardcoding the results is nice how simple, deterministic, and transparent it is
+  - [ ]  hardcoding doesn't scale well to bigrams and beyone
