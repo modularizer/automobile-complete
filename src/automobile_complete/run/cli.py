@@ -15,13 +15,12 @@ import sys
 import termios
 import time
 import tty
+from pathlib import Path
 from typing import Literal, Any
 
-from trie import Trie
-
-RESET = "\033[0m"
-GRAY = "\033[90m"  # Light gray for completion
-REPLACE_LINE = "\r\033[K"
+from automobile_complete.engine import Trie
+from automobile_complete.utils.chars import BACKSPACE, TAB, CTRL_D_ORD, CTRL_C_ORD, BACKSPACE_ORD, CARRIAGE_RETURN
+from automobile_complete.utils.colors import RESET, REPLACE_LINE, GRAY, ESC
 
 
 def get_char():
@@ -39,7 +38,7 @@ def get_char():
             ch = sys.stdin.read(1)
             
             # Check for escape sequence (might be Shift+Enter or other special keys)
-            if ch == '\033':  # ESC character
+            if ch == ESC:  # ESC character
                 # Try to read the rest of the escape sequence
                 # Use non-blocking read with a small delay
                 import select
@@ -75,7 +74,7 @@ def format_with_completion(text: str, completion: str) -> str:
 
     
     # Clean text (remove control characters for display)
-    display_text = text.replace("\t", "").replace("\b", "")
+    display_text = text.replace(TAB, "").replace(BACKSPACE, "")
     
     # Format completion in gray if available
     if completion:
@@ -98,7 +97,7 @@ def format_text_only(text: str) -> str:
         Clean text string
     """
     # Clean text (remove control characters for display)
-    return text.replace("\t", "").replace("\b", "")
+    return text.replace(TAB, "").replace(BACKSPACE, "")
 
 
 def interactive_demo(trie: Trie,
@@ -147,7 +146,7 @@ def interactive_demo(trie: Trie,
     # Initialize state - start at root
     current_node = trie
     has_typed = False
-    safe_print(f"{GRAY}{placeholder}{RESET}" if placeholder else "", end="\r")
+    safe_print(f"{GRAY}{placeholder}{RESET}" if placeholder else "", end=CARRIAGE_RETURN)
     
     try:
         while True:
@@ -167,7 +166,7 @@ def interactive_demo(trie: Trie,
                 safe_print(f"{REPLACE_LINE}{formatted_with}", end="", flush=True)
                 # Step 2: Print without completion (don't clear - gray text stays visible)
                 formatted_without = format_text_only(full_text)
-                safe_print(f"\r{formatted_without}", end="", flush=True)
+                safe_print(f"{CARRIAGE_RETURN}{formatted_without}", end="", flush=True)
             elif has_typed:
                 # No completion, just print the text
                 formatted = format_text_only(full_text)
@@ -183,15 +182,15 @@ def interactive_demo(trie: Trie,
 
 
             # Handle special characters
-            if ord(ch) == 3:  # Ctrl+C
+            if ord(ch) == CTRL_C_ORD:  # Ctrl+C
                 if noisy:
                     safe_print("\n\nExiting...")
                 break
-            elif ord(ch) == 4:  # Ctrl+D (EOF)
+            elif ord(ch) == CTRL_D_ORD:  # Ctrl+D (EOF)
                 if noisy:
                     safe_print("\n\nExiting...")
                 break
-            elif ch == '\t':  # Tab - accept completion
+            elif ch == TAB:  # Tab - accept completion
                 if completion:
                     # Accept the completion
                     current_node = current_node.accept()
@@ -200,11 +199,11 @@ def interactive_demo(trie: Trie,
                     formatted = format_text_only(full_text)
                     safe_print(f"{REPLACE_LINE}{formatted}", end="", flush=True)
                 continue
-            elif ch == '\b' or ord(ch) == 127:  # Backspace
+            elif ch == BACKSPACE or ord(ch) == BACKSPACE_ORD:  # Backspace
                 # Use trie's built-in backspace handling via walk_to
-                current_node = current_node.walk_to('\b')
+                current_node = current_node.walk_to(BACKSPACE)
                 continue
-            elif ch == '\r' or ch == '\n':  # Regular Enter - exit
+            elif ch == CARRIAGE_RETURN or ch == '\n':  # Regular Enter - exit
                 # Accept current completion if any
                 if completion:
                     current_node = current_node.accept()
@@ -212,7 +211,7 @@ def interactive_demo(trie: Trie,
                 # Clear line, print final text to display stream, then newline before exiting
                 safe_print(f"{REPLACE_LINE}{full_text}")  # Clear to end, print text, newline
                 break
-            elif ch.startswith('\033') and ('13;2' in ch or 'OM' in ch):  # Shift+Enter (escape sequence)
+            elif ch.startswith(ESC) and ('13;2' in ch or 'OM' in ch):  # Shift+Enter (escape sequence)
                 # Shift+Enter detected - insert newline instead of exiting
                 # Note: Shift+Enter detection works on most modern terminals but may vary
                 # Accept current completion if any, then newline
@@ -240,6 +239,8 @@ def interactive_demo(trie: Trie,
     finally:
         # Write final result to stdout (only when piped, otherwise it's already there)
         final_text = current_node.full_text or ""
+        if not final_text.endswith("\n"):
+            final_text += "\n"
         if is_piped:
             try:
                 print(final_text, file=sys.stdout, flush=True)
@@ -292,11 +293,11 @@ Examples:
     )
     
     parser.add_argument(
-        "word_file",
+        "completion_files",
         type=str,
-        nargs="?",
-        default="out.txt",
-        help="Path to word file to load (created by preprocess.py). If not provided, uses out.txt."
+        nargs="*",
+        default=["out.txt"],
+        help="One or more completion files to load (pre|post #freq format). If not provided, uses out.txt."
     )
     
     parser.add_argument(
@@ -312,12 +313,23 @@ Examples:
     # When piped, send noisy messages to stderr
     noisy_stream = sys.stderr if is_piped else sys.stdout
     
-    # Load trie from file or use demo
+    # Load trie from completion file(s)
+    completion_files = args.completion_files if args.completion_files else ["out.txt"]
+    
     if args.noisy:
-        print(f"Loading trie from: {args.word_file}", file=noisy_stream)
+        print(f"Loading trie from {len(completion_files)} file(s): {', '.join(completion_files)}", file=noisy_stream)
 
     t0 = time.perf_counter()
-    trie = Trie.from_file(args.word_file)
+    # Load all files and concatenate their content
+    all_lines = []
+    for completion_file in completion_files:
+        file_path = Path(completion_file)
+        if not file_path.exists():
+            parser.error(f"Completion file not found: {completion_file}")
+        all_lines.append(file_path.read_text())
+    
+    # Create trie from all concatenated content
+    trie = Trie.from_words("\n".join(all_lines))
     t1 = time.perf_counter()
     if args.noisy:
         print(f"Loaded trie with {len(trie.root.words)} words in {(t1 - t0):.3f}s\n", file=noisy_stream)

@@ -1,0 +1,9 @@
+BACKSPACE = "\b"
+TAB = "\t"
+CTRL_C_ORD = 3
+CTRL_D_ORD = 4
+BACKSPACE_ORD = 127
+CARRIAGE_RETURN = "\r"
+TAB = "\t"
+CTRL_C = "\x03"
+CTRL_D = "\x04"
