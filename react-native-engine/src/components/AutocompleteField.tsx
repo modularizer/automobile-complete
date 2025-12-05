@@ -64,6 +64,7 @@ export default function AutocompleteField({
         <CompletionDropdown
           completions={controller.availableCompletions}
           focusedIndex={controller.focusedIndex}
+          tabSelectableIndex={controller.tabSelectableIndex}
           onSelect={(completion: CompletionOption) =>
             controller.selectCompletion(completion)
           }

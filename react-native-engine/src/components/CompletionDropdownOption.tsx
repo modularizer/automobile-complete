@@ -10,6 +10,7 @@ interface CompletionDropdownOptionProps {
   };
   index: number;
   isFocused: boolean;
+  isTabSelectable?: boolean;
   onSelect: (completion: {
     typedPrefix: string;
     remainingPrefix: string;
@@ -30,6 +31,7 @@ export default function CompletionDropdownOption({
   completion,
   index,
   isFocused,
+  isTabSelectable = false,
   onSelect,
   styles: customStyles,
   theme,
@@ -53,12 +55,15 @@ export default function CompletionDropdownOption({
     completionPostfix: [themeStyles.completionPostfix, customStyles?.completionPostfix],
   };
 
+  // Style as focused if actually focused OR if it's the tab-selectable option
+  const shouldShowFocused = isFocused || isTabSelectable;
+
   return (
     <TouchableOpacity
       key={index}
       style={[
         mergedStyles.completionItem,
-        isFocused && mergedStyles.completionItemFocused,
+        shouldShowFocused && mergedStyles.completionItemFocused,
       ]}
       onPress={() => onSelect(completion)}
       activeOpacity={0.7}

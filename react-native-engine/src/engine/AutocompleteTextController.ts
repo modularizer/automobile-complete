@@ -7,6 +7,19 @@ export interface CompletionOption {
   completion: string;
 }
 
+export type TabBehavior =
+  | "insert-tab" // Insert a normal tab character
+  | "insert-spaces" // Insert spaces (configurable count)
+  | "do-nothing" // Do nothing
+  | "select-best" // Always select the best option
+  | "select-if-single"; // Select best option only if there's exactly one option
+
+export interface AutocompleteTextControllerOptions {
+  maxCompletions?: number;
+  tabBehavior?: TabBehavior;
+  tabSpacesCount?: number; // Number of spaces to insert when tabBehavior is "insert-spaces"
+}
+
 export class AutocompleteTextController {
   private _text: string = "";
   private _suggestion: string = "";
@@ -15,12 +28,22 @@ export class AutocompleteTextController {
   private _focusedIndex: number | null = null;
   private _inputRef: { current: any } | null = null;
   private _maxCompletions: number | undefined = undefined;
+  private _tabBehavior: TabBehavior = "select-if-single";
+  private _tabSpacesCount: number = 2;
 
   private listeners: Set<() => void> = new Set();
 
-  constructor(completionList: string, maxCompletions?: number) {
+  constructor(completionList: string, options?: AutocompleteTextControllerOptions) {
+    if (options) {
+      this._maxCompletions = options.maxCompletions;
+      this._tabBehavior = options.tabBehavior || "select-if-single";
+      this._tabSpacesCount = options.tabSpacesCount || 2;
+    } else {
+      this._tabBehavior = "select-if-single";
+      this._tabSpacesCount = 2;
+    }
+    
     console.log("[AutocompleteTextController] Constructor called, completionList length:", completionList.length);
-    this._maxCompletions = maxCompletions;
     this.initializeTrie(completionList);
   }
 
@@ -105,9 +128,47 @@ export class AutocompleteTextController {
     return this._currentNode ? this._currentNode.completionOptions(this._maxCompletions) : [];
   }
 
+  get tabSelectableIndex(): number | null {
+    const completions = this.availableCompletions;
+    
+    // If there's a focused option, that's what Tab would select
+    if (this._focusedIndex !== null && completions[this._focusedIndex]) {
+      return this._focusedIndex;
+    }
+
+    // If there's a suggestion, find the option that matches it
+    if (this._suggestion) {
+      const matchingIndex = completions.findIndex(
+        (opt) => opt.completion === this._suggestion
+      );
+      if (matchingIndex !== -1) {
+        return matchingIndex;
+      }
+    }
+
+    // Otherwise, check if tabBehavior would select the best option
+    if (this._tabBehavior === "select-best") {
+      return completions.length > 0 ? 0 : null;
+    }
+
+    if (this._tabBehavior === "select-if-single" && completions.length === 1) {
+      return 0;
+    }
+
+    return null;
+  }
+
   setMaxCompletions(maxCompletions: number | undefined) {
     this._maxCompletions = maxCompletions;
     this.notifyListeners();
+  }
+
+  setTabBehavior(behavior: TabBehavior) {
+    this._tabBehavior = behavior;
+  }
+
+  setTabSpacesCount(count: number) {
+    this._tabSpacesCount = count;
   }
 
   setInputRef(ref: { current: any }) {
@@ -176,15 +237,57 @@ export class AutocompleteTextController {
 
   handleTabOrEnter() {
     const completions = this.availableCompletions;
+    
+    // If there's a focused option, always select it
     if (
       this._focusedIndex !== null &&
       completions[this._focusedIndex]
     ) {
-      // Select focused option
       this.selectCompletion(completions[this._focusedIndex]);
-    } else {
-      // Accept current suggestion
+      return;
+    }
+
+    // Handle different tab behaviors when no suggestion is available
+    if (!this._suggestion) {
+      switch (this._tabBehavior) {
+        case "insert-tab":
+          this._text += TAB;
+          this.updateSuggestion();
+          this.notifyListeners();
+          return;
+
+        case "insert-spaces":
+          this._text += " ".repeat(this._tabSpacesCount);
+          this.updateSuggestion();
+          this.notifyListeners();
+          return;
+
+        case "do-nothing":
+          return;
+
+        case "select-best":
+          // Fall through to select best option
+          break;
+
+        case "select-if-single":
+          // Only proceed if there's exactly one option
+          if (completions.length !== 1) {
+            return;
+          }
+          // Fall through to select the single option
+          break;
+      }
+    }
+
+    // If we have a suggestion, accept it
+    if (this._suggestion) {
       this.acceptCurrentSuggestion();
+      return;
+    }
+
+    // If we have completions and behavior allows, select the best one
+    if (completions.length > 0 && (this._tabBehavior === "select-best" || this._tabBehavior === "select-if-single")) {
+      this.selectCompletion(completions[0]);
     }
   }
 

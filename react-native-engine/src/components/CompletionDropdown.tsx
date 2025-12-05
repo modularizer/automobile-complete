@@ -10,6 +10,7 @@ interface CompletionDropdownProps {
     completion: string;
   }>;
   focusedIndex: number | null;
+  tabSelectableIndex?: number | null;
   onSelect: (completion: {
     typedPrefix: string;
     remainingPrefix: string;
@@ -33,6 +34,7 @@ interface CompletionDropdownProps {
 export default function CompletionDropdown({
   completions,
   focusedIndex,
+  tabSelectableIndex,
   onSelect,
   styles: customStyles,
   optionStyles,
@@ -57,6 +59,7 @@ export default function CompletionDropdown({
             completion={completion}
             index={index}
             isFocused={focusedIndex === index}
+            isTabSelectable={tabSelectableIndex === index}
             onSelect={onSelect}
             styles={optionStyles}
             theme={theme}

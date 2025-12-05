@@ -38,7 +38,10 @@ export default function AutocompleteDemo({
   console.log("[AutocompleteDemo] Component rendering, completionList length:", completionList.length);
   const [controller] = useState(() => {
     console.log("[AutocompleteDemo] Creating controller with completionList");
-    return new AutocompleteTextController(completionList, maxCompletions);
+    return new AutocompleteTextController(completionList, {
+      maxCompletions,
+      tabBehavior: "select-best", // Default
+    });
   });
   const [updateTrigger, setUpdateTrigger] = useState(0);
   const inputRef = useRef<TextInput | null>(null);
