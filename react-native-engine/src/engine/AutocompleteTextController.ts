@@ -195,6 +195,7 @@ export class AutocompleteTextController {
   }
 
   handleTextChange(newText: string) {
+      // console.log("handling text", newText, this._currentNode);
     if (!this._currentNode) {
       this.updateSuggestion(newText);
       this.notifyListeners();

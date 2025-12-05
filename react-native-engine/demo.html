@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Automobile-Complete Demo</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+    
+    .description {
+      color: #666;
+      margin-bottom: 30px;
+      line-height: 1.6;
+    }
+    
+    .demo-section {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 30px;
+    }
+    
+    .demo-section h2 {
+      margin-top: 0;
+      color: #333;
+      font-size: 1.2em;
+    }
+    
+    .demo-section p {
+      color: #666;
+      margin-bottom: 15px;
+      font-size: 0.9em;
+    }
+    
+    input, textarea {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-family: inherit;
+    }
+    
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #007AFF;
+    }
+    
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    
+    .instructions {
+      background: #e3f2fd;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 15px;
+      font-size: 0.9em;
+      color: #1976d2;
+    }
+    
+    .instructions strong {
+      display: block;
+      margin-bottom: 5px;
+    }
+    
+    code {
+      background: #f5f5f5;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+    }
+    
+    .note {
+      background: #fff3cd;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 15px;
+      font-size: 0.9em;
+      color: #856404;
+      border-left: 4px solid #ffc107;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚗 Automobile-Complete Demo</h1>
+  <div class="description">
+    This demo shows how easy it is to add autocomplete to any HTML input using the standard CSS overlay pattern.
+    Try typing in the inputs below - you'll see gray suggestion text appear beyond your cursor!
+  </div>
+
+  <div class="demo-section">
+    <h2>Single-line Input</h2>
+    <p>Type words like "hello", "world", "hi there" to see autocomplete suggestions.</p>
+    <input id="input1" type="text" placeholder="Start typing...">
+    <div class="instructions">
+      <strong>Try it:</strong>
+      Type <code>h</code> to see suggestions starting with "h". Press <code>Tab</code> to accept, or use arrow keys to navigate.
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>Textarea (Multi-line)</h2>
+    <p>Autocomplete works with textareas too! Try typing multiple lines.</p>
+    <textarea id="textarea1" placeholder="Start typing..."></textarea>
+    <div class="instructions">
+      <strong>Try it:</strong>
+      Type <code>w</code> to see "world" or "welcome". Press <code>Enter</code> to create new lines (multi-line mode).
+    </div>
+  </div>
+
+  <div class="demo-section">
+    <h2>Another Input (Different Styling)</h2>
+    <p>Each input works independently. This one has the same autocomplete but you can style it however you want.</p>
+    <input id="input2" type="text" placeholder="Another input..." style="border-color: #4CAF50;">
+    <div class="instructions">
+      <strong>Note:</strong>
+      The autocomplete overlay automatically matches your input's styling (font, padding, border, etc.).
+    </div>
+  </div>
+
+  <script type="module">
+    // Sample completion list
+    const completionList = `
+Te|sting
+if| this works
+
+    `;
+
+    // Import from the bundled file
+    const { AutocompleteTextController, attachAutocomplete } = await import('./dist/automobile-complete.js');
+
+    // Create controllers for each input
+    const controller1 = new AutocompleteTextController(completionList);
+    const controller2 = new AutocompleteTextController(completionList, { maxLines: null }); // Multi-line
+    const controller3 = new AutocompleteTextController(completionList);
+
+    // Attach autocomplete to inputs
+    attachAutocomplete(document.getElementById('input1'), controller1);
+    attachAutocomplete(document.getElementById('textarea1'), controller2);
+    attachAutocomplete(document.getElementById('input2'), controller3);
+
+    console.log('✅ Autocomplete attached successfully!');
+
+  </script>
+</body>
+</html>
