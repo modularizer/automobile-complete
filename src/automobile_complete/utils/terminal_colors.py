@@ -86,11 +86,13 @@ class TerminalCode(str):
 
     @staticmethod
     def normname(s: str):
-        return s.lower().replace(" ","").replace("-","").replace("_","")
+        return s.lower().replace(" ","").replace("-","").replace("_","") if isinstance(s, str) else s
 
     @classmethod
     def retrieve(cls, name: str, group: str | None = None):
         if name is None:
+            return None
+        if not isinstance(name, str):
             return None
         if isinstance(name, TerminalCode):
             return name
@@ -125,22 +127,29 @@ class TerminalCode(str):
         for group in groups:
             if group not in cls.registry:
                 cls.registry[group] = {}
-            cls.registry[group] = obj
+            cls.registry[group][name] = obj
         return obj
 
     @property
     def aliases(self):
         return [x.name for x in self.reverse_registry[str(self)] if x.name != self.name]
 
-    def __call__(self, text: str):
-        return str(self) + text + RESET
+    def __call__(self, text: str = ""):
+        return self + text + RESET
 
     def __add__(self, other):
-        if isinstance(other, TerminalCode):
-            o = str(other)
-            oname = getattr(other, "name", o)
-            return TerminalCode(str(self) + o, name=f"{self.name}+{oname}")
-        return str(self) + other
+        o = str(other)
+        oname = getattr(other, "name", o)
+        return TerminalCode(str(self) + o, name=f"{self.name}+{oname}")
+
+    def __getitem__(self, item):
+        return self + item
+
+    def __getattr__(self, item):
+        return self + item
+
+    def print(self, m="", print=print, **kw):
+        print(self(m), **kw)
 
 
 TC = TerminalCode
@@ -184,12 +193,18 @@ class FGRGBTerminalCode(TerminalCode):
     def __new__(cls, rgb: BaseColor, name: str = "unknown", *groups: str):
         rgb: BaseColor = to_rgba(rgb)[:3]
         r, g, b = rgb
+        c = f"\033[38;2;{r};{g};{b}m"
+        # print("foreground", rgb, name, repr(c)[1:-1])
         groups = groups or ("unknown",)
         groups = [cls.normname(n) for n in groups]
         for g in ("rgb", "fg"):
             if g not in groups:
                 groups.append(g)
-        return super().__new__(code=f"\033[38;2;{r};{g};{b}m", name=name, *groups, rgb="rgb")
+        return super().__new__(cls,
+                               c,
+                               name,
+                               *groups,
+                               rgb=rgb)
 
 
 DARKRED = FGRGBTerminalCode("#8B0000", "darkred")
@@ -240,13 +255,17 @@ class BGRGBTerminalCode(TerminalCode):
     def __new__(cls, rgb: BaseColor, name: str = "unknown", *groups: str):
         rgb: BaseColor = to_rgba(rgb)[:3]
         r, g, b = rgb
+        c = f"\033[38;2;{r};{g};{b}m"
         groups = groups or ("unknown",)
         groups = [cls.normname(n) for n in groups]
         for g in ("rgb", "bg"):
             if g not in groups:
                 groups.append(g)
-        return super().__new__(code=f"\033[48;2;{r};{g};{b}m", name=name, *groups, rgb="rgb")
-
+        return super().__new__(cls,
+                               c,
+                               name,
+                               *groups,
+                               rgb=rgb)
 BG_DARKRED = BGRGBTerminalCode("#8B0000", "darkred")
 BG_DARKGREEN = BGRGBTerminalCode("#006400", "darkgreen")
 BG_DARKBLUE = BGRGBTerminalCode("#00008B", "darkblue")
@@ -282,7 +301,7 @@ STRIKETHROUGH = TC("\033[9m", "strikethrough", "styles")
 
 
 # _____________________________________________________________________________________________________________________
-INITIAL_DEFAULT_TERMINAL_COLOR = "white"
+INITIAL_DEFAULT_TERMINAL_COLOR = "#fff"
 settings = {
 
 }
@@ -305,7 +324,7 @@ def to_rgb(color, background=None) -> tuple[int, int, int]:
     b = round((1 - a) * bb + a * fb)
     return r, g, b
 
-settings["tc"] = to_rgb(INITIAL_DEFAULT_TERMINAL_COLOR, "white")
+settings["tc"] = to_rgb(INITIAL_DEFAULT_TERMINAL_COLOR, "#fff")
 
 def register_terminal_color(color: str, background_of_background=INITIAL_DEFAULT_TERMINAL_COLOR):
     settings["tc"] = to_rgb(color, background_of_background)
@@ -322,11 +341,11 @@ def get_style(style: list[str] | str | None = None):
         style = [style]
     s = TerminalCode.retrieve(style[0], "styles")
     if s is None:
-        raise Exception(f"unknown style: {style[0]}")
+        return TerminalCode("", "empty", "styles")
     for c in style[1:]:
         x = TerminalCode.retrieve(c, "styles")
-        if s is None:
-            raise Exception(f"unknown style: {c}")
+        if x is None:
+            x = TerminalCode("", "empty", "styles")
         s += x
     return s
 
@@ -344,7 +363,12 @@ def get_color(
     tc = TerminalCode.retrieve(terminal_color, "bg") or to_rgb(terminal_color)
     bgtc = "" if background is None else (TerminalCode.retrieve(background, "bg") or BGRGBTerminalCode(to_rgb(background, tc)))
     fgtc = "" if foreground is None else (TerminalCode.retrieve(foreground, "fg") or FGRGBTerminalCode(to_rgb(foreground, background)))
-    return s + bgtc + fgtc
+    opts = [x for x in (s, bgtc, fgtc) if x]
+    if len(opts) == 0:
+        return TerminalCode("", "empty", "text")
+    if len(opts) == 1:
+        return opts[0]
+    return TerminalCode("".join(opts), f"bg={background},fg={foreground},s={style}", "text")
 
 
 def demo_color(
@@ -432,15 +456,25 @@ class FancyText:
         settings["tc"] = value
 
     def get_item(self, item):
+        if isinstance(item, TerminalCode):
+            return item
         s = get_style(item)
         if s:
             return s
         if item.startswith("bg_"):
-            return get_color(background=item[3:])
-        return get_color(foreground=item)
+            return TerminalCode.retrieve(item[3:], "bg") or BGRGBTerminalCode(item[3:])
+        return TerminalCode.retrieve(item, "fg") or FGRGBTerminalCode(item)
 
     def __iter__(self):
         return iter({"styles": styles, "fg": fg, "bg": bg})
+
+    def __call__(self,
+                 foreground: BaseColor | TerminalCode | None = None,
+                 background: BaseColor | TerminalCode | None = None,
+                 style: list[str] | str = "",
+                 terminal_color: str | None = None
+                 ):
+        return get_color(foreground=foreground, background=background, style=style, terminal_color=terminal_color)
 
     def full_demo(self):
         for k in self.fg:
