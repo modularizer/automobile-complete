@@ -1,6 +1,6 @@
 import sys
 
-from automobile_complete.utils.terminal.terminal_colors import colors
+from automobile_complete.utils.terminal.colors import colors
 import automobile_complete.utils.terminal.cursor  as cursor
 
 

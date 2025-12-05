@@ -293,13 +293,22 @@ BG_MAROON = BGRGBTerminalCode(r.MAROON_HEX, "maroon")
 
 # === Text Attributes ===
 BOLD       = TC(r.BOLD      , "bold", "styles")
+B      = TC(r.BOLD      , "b", "styles")
 DIM        = TC(r.DIM       , "dim", "styles")
+D      = TC(r.DIM       , "d", "styles")
 ITALIC     = TC(r.ITALIC    , "italic", "styles")
+I     = TC(r.ITALIC    , "i", "styles")
 UNDERLINE  = TC(r.UNDERLINE , "underline", "styles")
+U  = TC(r.UNDERLINE , "u", "styles")
 BLINK      = TC(r.BLINK     , "blink", "styles")     # rarely supported, and often disabled
 REVERSE    = TC(r.REVERSE   , "reverse", "styles")     # swap fg/bg
+R    = TC(r.REVERSE   , "r", "styles")     # swap fg/bg
 HIDDEN     = TC(r.HIDDEN    , "hidden", "styles")     # used for passwords
+PASSWORD     = TC(r.HIDDEN    , "password", "styles")     # used for passwords
+H    = TC(r.HIDDEN    , "h", "styles")     # used for passwords
 STRIKETHROUGH = TC(r.STRIKETHROUGH, "strikethrough", "styles")
+S = TC(r.STRIKETHROUGH, "s", "styles")
+DASH = TC(r.STRIKETHROUGH, "-", "styles")
 
 
 # _____________________________________________________________________________________________________________________

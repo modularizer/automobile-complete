@@ -23,7 +23,7 @@ from automobile_complete.engine import Trie
 from automobile_complete.utils.env import env
 from automobile_complete.utils.terminal.chars import ESC, CARRIAGE_RETURN, CTRL, TAB
 from automobile_complete.utils.terminal.terminal import print_with_suggestion
-from automobile_complete.utils.terminal.terminal_colors import GRAY, RESET
+from automobile_complete.utils.terminal.colors import GRAY, RESET
 
 
 def get_char():

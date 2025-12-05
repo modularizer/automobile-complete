@@ -14,7 +14,7 @@ with support for displaying completion suggestions in a user-friendly format.
 """
 from automobile_complete.engine.core_trie import CoreTrie
 from automobile_complete.utils.terminal.chars import BACKSPACE, CARRIAGE_RETURN, TAB
-from automobile_complete.utils.terminal.terminal_colors import RESET, GREY, WHITE
+from automobile_complete.utils.terminal.colors import RESET, GREY, WHITE
 
 
 class Trie(CoreTrie):
