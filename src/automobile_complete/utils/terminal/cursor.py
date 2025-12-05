@@ -1,12 +1,38 @@
+from typing import Literal
+
+
+DETECT_MODE = "detect"
+CONSOLE_MODE = "console"
+TERMINAL_MODE = "terminal"
+
+def detect():
+    try:
+        import curses
+        curses.setupterm()
+        _sc = curses.tigetstr("sc")  # save cursor
+        _rc = curses.tigetstr("rc")  # restore cursor
+        SAVE_CURSOR_DETECTED = _sc.decode() if _sc else ""
+        RESTORE_CURSOR_DETECTED = _rc.decode() if _rc else ""
+        return SAVE_CURSOR_DETECTED, RESTORE_CURSOR_DETECTED
+    except:
+        return "", ""
+
+SAVE_CURSOR_DETECTED, RESTORE_CURSOR_DETECTED = "", ""
+SAVE_CURSOR_DETECTED, RESTORE_CURSOR_DETECTED = detect()
+
 
 CARRIAGE_RETURN = "\r"
 CLEAR_REST_OF_LINE = f"\033[K"
 CLEAR_LINE = f"{CARRIAGE_RETURN}{CLEAR_REST_OF_LINE}"
 ERASE_LINE="\033[2K"
 
+
 settings = {
-    "cursor_mode": "terminal"
+    "cursor_mode": DETECT_MODE
 }
+
+def set_cursor_mode(s: Literal["terminal", "console", "detect"]):
+    settings["cursor_mode"] = s
 
 SAVE_CURSOR_TERMINAL = "\0337"    # or "\033[s"
 RESTORE_CURSOR_TERMINAL = "\0338" # or "\033[u"
@@ -15,11 +41,13 @@ RESTORE_CURSOR_CONSOLE = "\033[u"
 
 
 def save():
-    return SAVE_CURSOR_TERMINAL if settings["cursor_mode"] == "terminal" else SAVE_CURSOR_CONSOLE
+    c = settings["cursor_mode"]
+    return SAVE_CURSOR_DETECTED if c == DETECT_MODE else SAVE_CURSOR_TERMINAL if c == TERMINAL_MODE else SAVE_CURSOR_CONSOLE
 
 
 def restore():
-    return RESTORE_CURSOR_TERMINAL if settings["cursor_mode"] == "terminal" else RESTORE_CURSOR_CONSOLE
+    c = settings["cursor_mode"]
+    return RESTORE_CURSOR_DETECTED if c == DETECT_MODE else  RESTORE_CURSOR_TERMINAL if c == TERMINAL_MODE else RESTORE_CURSOR_CONSOLE
 
 def left(n=1):
     return f"\033[{n}D"
