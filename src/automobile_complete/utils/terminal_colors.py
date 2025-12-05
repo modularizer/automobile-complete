@@ -1,86 +1,6 @@
-class TerminalCode(str):
-    registry = {
+BaseColor = int | str | tuple[int, int, int] | tuple[int, int, int, float] | tuple[int, int, int, int]
 
-    }
-    def __new__(cls, code: str, name: str = "unknown", *groups: str, rgb: tuple(int, int, int) | None = None):
-        obj = super().__new__(cls, code)  # create the string instance
-        obj.name = name                     # attach custom attribute
-        groups = groups or ("unknown",)
-        obj.groups = groups
-        obj.rpg = rgb
-        for group in groups:
-            if group not in cls.registry:
-                cls.registry[group] = {}
-            cls.registry[group] = obj
-        return obj
-
-    def __call__(self, text: str):
-        return str(self) + text + RESET
-
-    def __add__(self, other):
-        if isinstance(other, TerminalCode):
-            o = str(other)
-            oname = getattr(other, "name", o)
-            return TerminalCode(str(self) + o, name=f"{self.name}+{oname}")
-        return str(self) + other
-
-TC = TerminalCode
-
-
-RESET = TC("\033[0m", "reset", "fg", "bg", "styles")
-
-
-known_colors = {
-    # --- Grayscale ---
-    "white":        "#FFFFFF",
-    "black":        "#000000",
-    "gray":         "#808080",
-    "grey":         "#808080",
-    "lightgray":    "#D3D3D3",
-    "lightgrey":    "#D3D3D3",
-    "darkgray":     "#A9A9A9",
-    "darkgrey":     "#A9A9A9",
-
-    # --- Primary colors ---
-    "red":          "#FF0000",
-    "green":        "#00FF00",
-    "blue":         "#0000FF",
-
-    # --- Secondary colors ---
-    "cyan":         "#00FFFF",
-    "magenta":      "#FF00FF",
-    "yellow":       "#FFFF00",
-
-    # --- Darker variants ---
-    "darkred":      "#8B0000",
-    "darkgreen":    "#006400",
-    "darkblue":     "#00008B",
-    "darkcyan":     "#008B8B",
-    "darkmagenta":  "#8B008B",
-    "darkyellow":   "#8B8B00",
-
-    # --- Light variants ---
-    "lightred":     "#FFA07A",
-    "lightgreen":   "#90EE90",
-    "lightblue":    "#ADD8E6",
-    "lightcyan":    "#E0FFFF",
-    "lightmagenta": "#FF77FF",
-    "lightyellow":  "#FFFFE0",
-
-    # --- Nice functional colors (UI-friendly) ---
-    "orange":       "#FFA500",
-    "pink":         "#FFC0CB",
-    "purple":       "#800080",
-    "brown":        "#A52A2A",
-    "gold":         "#FFD700",
-    "lime":         "#32CD32",
-    "teal":         "#008080",
-    "navy":         "#000080",
-    "olive":        "#808000",
-    "maroon":       "#800000",
-}
-
-def to_rgba(color) -> tuple[int, int, int, float]:
+def to_rgba(color: BaseColor) -> tuple[int, int, int, float] | None:
     """
     Accepts:
       - some common colors from known_colors
@@ -91,30 +11,31 @@ def to_rgba(color) -> tuple[int, int, int, float]:
     Returns:
       (r, g, b, a) tuple
     """
+    if color is None:
+        return None
+    if color == "":
+        return (255, 255, 255, 1)
+    if isinstance(color, int):
+        color = hex(color)
+    if hasattr(color, "rgba"):
+        return color.rgba
+    if hasattr(color, "rgb"):
+        return *color.rgb, 1
+    if isinstance(color, str):
+        color = TerminalCode.normname(color)
+        r = repr(color)
+        if r.startswith("'\\"):
+            if r.startswith("'\\033[38;") or r.startswith("'\\033[48;"):
+                rs, gs, bs = r[:-1].split(",")[1:]
+                return int(rs), int(gs), int(bs)
+            tc = TerminalCode.retrieve(color)
+            if tc and tc.rgb:
+                return *tc.rgb, 1
+            raise Exception("invalid string")
     if not color:
         return (255, 255, 255, 1)
     if isinstance(color, str):
         color = color.lower()
-    if isinstance(color, str) and color in known_colors:
-        color = known_colors[color]
-
-    if isinstance(color, str) and repr(color).startswith("'\\"):
-        if repr(color).startswith("'\\033[38;"):
-            rs, gs, bs = color.split('[38;')[1][:-1].split(";")
-            return int(rs), int(gs), int(bs), 1
-        if repr(color).startswith("'\\033[48;"):
-            rs, gs, bs = color.split('[48;')[1][:-1].split(";")
-            return int(rs), int(gs), int(bs), 1
-        for k, v in known_foreground_colors.items():
-            if color == v:
-                color = ansi_rgb[k]
-                return *color, 1
-        for k, v in known_background_colors.items():
-            if color == v:
-                color = ansi_rgb[k]
-                return *color, 1
-        raise Exception(f"unknown color: {color}")
-
 
     if isinstance(color, tuple) and len(color) == 3:
         r, g, b = color
@@ -154,23 +75,78 @@ def to_rgba(color) -> tuple[int, int, int, float]:
     return r, g, b, a
 
 
-def to_rgb(color, background="white") -> tuple[int, int, int]:
-    """
-    fg, bg: (r,g,b) or hex
-    alpha: 0.0–1.0 (fg opacity over bg)
-    """
-    fr, fg, fb, fa = to_rgba(color)
-    if fa == 1:
-        return fr, fg, fb
-    br, bg, bb, ba = to_rgba(background)
-    a = max(0.0, min(1.0, float(fa)))
 
-    r = round((1 - a) * br + a * fr)
-    g = round((1 - a) * bg + a * fg)
-    b = round((1 - a) * bb + a * fb)
-    return r, g, b
+class TerminalCode(str):
+    registry = {
+
+    }
+    reverse_registry: dict[str, list["TerminalCode"]] = {
+
+    }
+
+    @staticmethod
+    def normname(s: str):
+        return s.lower().replace(" ","").replace("-","").replace("_","")
+
+    @classmethod
+    def retrieve(cls, name: str, group: str | None = None):
+        if name is None:
+            return None
+        if isinstance(name, TerminalCode):
+            return name
+        if (repr(name).startswith("'\\")):
+            rr = cls.reverse_registry.get(name)
+            if rr:
+                return rr[0]
+            return cls(name)
+        name = cls.normname(name)
+        if group is not None:
+            group = cls.normname(group)
+            return cls.registry.get(group, {}).get(name)
+
+        if name in cls.registry.get("unknown", {}):
+            return cls.registry["unknown"][name]
+        for g in cls.registry:
+            if name in cls.registry[g]:
+                return cls.registry[g][name]
+
+    def __new__(cls, code: str, name: str = "unknown", *groups: str, rgb: BaseColor | None = None):
+        obj = super().__new__(cls, code)  # create the string instance
+        rgb = to_rgba(rgb)[:3] if rgb is not None else None
+        name = cls.normname(name)
+        obj.name = name                     # attach custom attribute
+        if name not in cls.reverse_registry:
+            cls.reverse_registry[name] = []
+        cls.reverse_registry[name].append(obj)
+        groups = groups or ("unknown",)
+        groups = [cls.normname(n) for n in groups]
+        obj.groups = groups
+        obj.rgb = rgb
+        for group in groups:
+            if group not in cls.registry:
+                cls.registry[group] = {}
+            cls.registry[group] = obj
+        return obj
+
+    @property
+    def aliases(self):
+        return [x.name for x in self.reverse_registry[str(self)] if x.name != self.name]
+
+    def __call__(self, text: str):
+        return str(self) + text + RESET
+
+    def __add__(self, other):
+        if isinstance(other, TerminalCode):
+            o = str(other)
+            oname = getattr(other, "name", o)
+            return TerminalCode(str(self) + o, name=f"{self.name}+{oname}")
+        return str(self) + other
 
 
+TC = TerminalCode
+
+
+RESET = TC("\033[0m", "reset", "fg", "bg", "styles")
 
 
 
@@ -203,190 +179,186 @@ BRIGHT_MAGENTA = TC("\033[95m", "brightmagenta", "fg", rgb=(f, b, f))
 BRIGHT_CYAN    = TC("\033[96m", "brightcyan", "fg", rgb=(b, f, f))
 BRIGHT_WHITE   = TC("\033[97m", "brightwhite", "fg", rgb=(f,f, f))
 
-known_foreground_colors = {
-    # Standard 8 colors
-    "black":        BLACK,
-    "red":          RED,
-    "green":        GREEN,
-    "yellow":       YELLOW,
-    "blue":         BLUE,
-    "magenta":      MAGENTA,
-    "cyan":         CYAN,
-    "white":        WHITE,
 
-    # Aliases
-    "light_gray":   LIGHT_GRAY,
-    "lightgrey":    LIGHT_GRAY,
-    "lightgray":    LIGHT_GRAY,
-
-    "dark_gray":    DARK_GRAY,
-    "darkgrey":     DARK_GRAY,
-    "darkgray":     DARK_GRAY,
-
-    # Bright 8 colors
-    "bright_black":   BRIGHT_BLACK,
-    "bright_red":     BRIGHT_RED,
-    "bright_green":   BRIGHT_GREEN,
-    "bright_yellow":  BRIGHT_YELLOW,
-    "bright_blue":    BRIGHT_BLUE,
-    "bright_magenta": BRIGHT_MAGENTA,
-    "bright_cyan":    BRIGHT_CYAN,
-    "bright_white":   BRIGHT_WHITE,
-}
+class FGRGBTerminalCode(TerminalCode):
+    def __new__(cls, rgb: BaseColor, name: str = "unknown", *groups: str):
+        rgb: BaseColor = to_rgba(rgb)[:3]
+        r, g, b = rgb
+        groups = groups or ("unknown",)
+        groups = [cls.normname(n) for n in groups]
+        for g in ("rgb", "fg"):
+            if g not in groups:
+                groups.append(g)
+        return super().__new__(code=f"\033[38;2;{r};{g};{b}m", name=name, *groups, rgb="rgb")
 
 
+DARKRED = FGRGBTerminalCode("#8B0000", "darkred")
+DARKGREEN = FGRGBTerminalCode("#006400", "darkgreen")
+DARKBLUE = FGRGBTerminalCode("#00008B", "darkblue")
+DARKCYAN = FGRGBTerminalCode("#008B8B", "darkcyan")
+DARKMAGENTA = FGRGBTerminalCode("#8B008B", "darkmagenta")
+DARKYELLOW = FGRGBTerminalCode("#8B8B00", "darkyellow")
+LIGHTRED = FGRGBTerminalCode("#FFA07A", "lightred")
+LIGHTGREEN = FGRGBTerminalCode("#90EE90", "lightgreen")
+LIGHTBLUE = FGRGBTerminalCode("#ADD8E6", "lightblue")
+LIGHTCYAN = FGRGBTerminalCode("#E0FFFF", "lightcyan")
+LIGHTMAGENTA = FGRGBTerminalCode("#FF77FF", "lightmagenta")
+LIGHTYELLOW = FGRGBTerminalCode("#FFFFE0", "lightyellow")
+ORANGE = FGRGBTerminalCode("#FFA500", "orange")
+PINK = FGRGBTerminalCode("#FFC0CB", "pink")
+PURPLE = FGRGBTerminalCode("#800080", "purple")
+BROWN = FGRGBTerminalCode("#A52A2A", "brown")
+GOLD = FGRGBTerminalCode("#FFD700", "gold")
+LIME = FGRGBTerminalCode("#32CD32", "lime")
+TEAL = FGRGBTerminalCode("#008080", "teal")
+NAVY = FGRGBTerminalCode("#000080", "navy")
+OLIVE = FGRGBTerminalCode("#808000", "olive")
+MAROON = FGRGBTerminalCode("#800000", "maroon")
 
-def gen_rgb(r: int, g: int, b: int) -> str:
-    """Return an ANSI escape sequence for 24-bit RGB foreground color."""
-    return f"\033[38;2;{r};{g};{b}m"
+
 
 # === Standard Background Colors ===
-BG_BLACK   = "\033[40m"
-BG_RED     = "\033[41m"
-BG_GREEN   = "\033[42m"
-BG_YELLOW  = "\033[43m"
-BG_BLUE    = "\033[44m"
-BG_MAGENTA = "\033[45m"
-BG_CYAN    = "\033[46m"
-BG_WHITE   = "\033[47m"
-BG_BRIGHT_BLACK   = "\033[100m"
-BG_BRIGHT_RED     = "\033[101m"
-BG_BRIGHT_GREEN   = "\033[102m"
-BG_BRIGHT_YELLOW  = "\033[103m"
-BG_BRIGHT_BLUE    = "\033[104m"
-BG_BRIGHT_MAGENTA = "\033[105m"
-BG_BRIGHT_CYAN    = "\033[106m"
-BG_BRIGHT_WHITE   = "\033[107m"
-
-known_background_colors = {
-    # Standard 8 background colors
-    "black":        BG_BLACK,
-    "red":          BG_RED,
-    "green":        BG_GREEN,
-    "yellow":       BG_YELLOW,
-    "blue":         BG_BLUE,
-    "magenta":      BG_MAGENTA,
-    "cyan":         BG_CYAN,
-    "white":        BG_WHITE,
-
-    # Aliases (light/dark grays)
-    "light_gray":   BG_WHITE,
-    "lightgrey":    BG_WHITE,
-    "lightgray":    BG_WHITE,
-
-    "dark_gray":    BG_BRIGHT_BLACK,   # typical dark-gray bg
-    "darkgrey":     BG_BRIGHT_BLACK,
-    "darkgray":     BG_BRIGHT_BLACK,
-
-    # Bright background colors
-    "bright_black":   BG_BRIGHT_BLACK,
-    "bright_red":     BG_BRIGHT_RED,
-    "bright_green":   BG_BRIGHT_GREEN,
-    "bright_yellow":  BG_BRIGHT_YELLOW,
-    "bright_blue":    BG_BRIGHT_BLUE,
-    "bright_magenta": BG_BRIGHT_MAGENTA,
-    "bright_cyan":    BG_BRIGHT_CYAN,
-    "bright_white":   BG_BRIGHT_WHITE,
-}
+BG_BLACK   = TC("\033[40m", "black", "bg", rgb=(b,b,b))
+BG_RED     = TC("\033[41m", "red", "bg", rgb=(v, b, b))
+BG_GREEN   = TC("\033[42m", "green", "bg", rgb=(b, v, b))
+BG_YELLOW  = TC("\033[43m", "yellow", "bg", rgb=(v, v, b))
+BG_BLUE    = TC("\033[44m", "blue", "bg", rgb=(b, b, blu))
+BG_MAGENTA = TC("\033[45m", "magenta", "bg", rgb=(v, b, v))
+BG_CYAN    = TC("\033[46m", "cyan", "bg", rgb=(b, v, v))
+BG_WHITE   = TC("\033[47m", "white", "bg", rgb=(w,w,w))
+BG_BRIGHT_BLACK   = TC("\033[100m", "brightblack", "bg", rgb=(h, h, h))
+BG_BRIGHT_RED     = TC("\033[101m", "brightred", "bg", rgb=(f, b, b))
+BG_BRIGHT_GREEN   = TC("\033[102m", "brightgreen", "bg", rgb=(b, f, b))
+BG_BRIGHT_YELLOW  = TC("\033[103m", "brightyellow", "bg", rgb=(f, f, b))
+BG_BRIGHT_BLUE    = TC("\033[104m", "brightblue", "bg", rgb=(t, t, f))
+BG_BRIGHT_MAGENTA = TC("\033[105m", "brightmagenta", "bg", rgb=(f, b, f))
+BG_BRIGHT_CYAN    = TC("\033[106m", "brightcyan", "bg", rgb=(b, f, f))
+BG_BRIGHT_WHITE   = TC("\033[107m", "brightwhite", "bg", rgb=(f, f, f))
 
 
+class BGRGBTerminalCode(TerminalCode):
+    def __new__(cls, rgb: BaseColor, name: str = "unknown", *groups: str):
+        rgb: BaseColor = to_rgba(rgb)[:3]
+        r, g, b = rgb
+        groups = groups or ("unknown",)
+        groups = [cls.normname(n) for n in groups]
+        for g in ("rgb", "bg"):
+            if g not in groups:
+                groups.append(g)
+        return super().__new__(code=f"\033[48;2;{r};{g};{b}m", name=name, *groups, rgb="rgb")
+
+BG_DARKRED = BGRGBTerminalCode("#8B0000", "darkred")
+BG_DARKGREEN = BGRGBTerminalCode("#006400", "darkgreen")
+BG_DARKBLUE = BGRGBTerminalCode("#00008B", "darkblue")
+BG_DARKCYAN = BGRGBTerminalCode("#008B8B", "darkcyan")
+BG_DARKMAGENTA = BGRGBTerminalCode("#8B008B", "darkmagenta")
+BG_DARKYELLOW = BGRGBTerminalCode("#8B8B00", "darkyellow")
+BG_LIGHTRED = BGRGBTerminalCode("#FFA07A", "lightred")
+BG_LIGHTGREEN = BGRGBTerminalCode("#90EE90", "lightgreen")
+BG_LIGHTBLUE = BGRGBTerminalCode("#ADD8E6", "lightblue")
+BG_LIGHTCYAN = BGRGBTerminalCode("#E0FFFF", "lightcyan")
+BG_LIGHTMAGENTA = BGRGBTerminalCode("#FF77FF", "lightmagenta")
+BG_LIGHTYELLOW = BGRGBTerminalCode("#FFFFE0", "lightyellow")
+BG_ORANGE = BGRGBTerminalCode("#FFA500", "orange")
+BG_PINK = BGRGBTerminalCode("#FFC0CB", "pink")
+BG_PURPLE = BGRGBTerminalCode("#800080", "purple")
+BG_BROWN = BGRGBTerminalCode("#A52A2A", "brown")
+BG_GOLD = BGRGBTerminalCode("#FFD700", "gold")
+BG_LIME = BGRGBTerminalCode("#32CD32", "lime")
+BG_TEAL = BGRGBTerminalCode("#008080", "teal")
+BG_NAVY = BGRGBTerminalCode("#000080", "navy")
+BG_OLIVE = BGRGBTerminalCode("#808000", "olive")
+BG_MAROON = BGRGBTerminalCode("#800000", "maroon")
 
 # === Text Attributes ===
-BOLD         = "\033[1m"
-DIM          = "\033[2m"
-ITALIC       = "\033[3m"
-UNDERLINE    = "\033[4m"
-BLINK        = "\033[5m"     # rarely supported, and often disabled
-REVERSE      = "\033[7m"     # swap fg/bg
-HIDDEN       = "\033[8m"     # used for passwords
-STRIKETHROUGH = "\033[9m"
-
-known_styles = {
-    "bold": BOLD,
-    "b": BOLD,
-    "dim": DIM,
-    "d": DIM,
-    "i": ITALIC,
-    "italic": ITALIC,
-    "blink": BLINK,
-    "reverse": REVERSE,
-    "hidden": HIDDEN,
-    "strikethrough": STRIKETHROUGH,
-    "-": STRIKETHROUGH,
-    "underline": UNDERLINE,
-    "u": UNDERLINE,
-    "r": REVERSE
-}
-
-def gen_styles(style: list[str] | str = ""):
-    if not style:
-        return ""
-    if isinstance(style, list):
-        styles = style
-    elif len(style) == 1:
-        styles = [style]
-    elif all(c in known_styles for c in style):
-        styles = [c for c in style]
-    else:
-        styles = [style]
-    s = ""
-    for st in styles:
-        st = st.lower()
-        if st in known_styles:
-            s += known_styles[st]
-    return s
+BOLD         = TC("\033[1m", "bold", "styles")
+DIM          = TC("\033[2m", "dim", "styles")
+ITALIC       = TC("\033[3m", "italic", "styles")
+UNDERLINE    = TC("\033[4m", "underline", "styles")
+BLINK        = TC("\033[5m", "blink", "styles")     # rarely supported, and often disabled
+REVERSE      = TC("\033[7m", "reverse", "styles")     # swap fg/bg
+HIDDEN       = TC("\033[8m", "hidden", "styles")     # used for passwords
+STRIKETHROUGH = TC("\033[9m", "strikethrough", "styles")
 
 
-def gen_bg_rgb(r: int, g: int, b: int) -> str:
-    """Return an ANSI escape sequence for 24-bit RGB background color."""
-    return f"\033[48;2;{r};{g};{b}m"
-
+# _____________________________________________________________________________________________________________________
 INITIAL_DEFAULT_TERMINAL_COLOR = "white"
 settings = {
-    "tc": INITIAL_DEFAULT_TERMINAL_COLOR
+
 }
+
+def to_rgb(color, background=None) -> tuple[int, int, int]:
+    """
+    fg, bg: (r,g,b) or hex
+    alpha: 0.0–1.0 (fg opacity over bg)
+    """
+    fr, fg, fb, fa = to_rgba(color)
+    if fa == 1:
+        return fr, fg, fb
+    if background is None:
+        background = settings.get("tc", None)
+    br, bg, bb, ba = to_rgba(background)
+    a = max(0.0, min(1.0, float(fa)))
+
+    r = round((1 - a) * br + a * fr)
+    g = round((1 - a) * bg + a * fg)
+    b = round((1 - a) * bb + a * fb)
+    return r, g, b
+
+settings["tc"] = to_rgb(INITIAL_DEFAULT_TERMINAL_COLOR, "white")
+
 def register_terminal_color(color: str, background_of_background=INITIAL_DEFAULT_TERMINAL_COLOR):
     settings["tc"] = to_rgb(color, background_of_background)
 
-def get_color(foreground: str  | None = None, background: str | None = None, style: list[str] | str = "", terminal_color: str | None = None):
-    s = gen_styles(style)
 
+def get_style(style: list[str] | str | None = None):
+    if isinstance(style, TerminalCode):
+        return style
+    if not style:
+        return TerminalCode("", "empty", "styles")
+    known_styles = TerminalCode.registry.get("styles", "")
+    style = TerminalCode.normname(style) if isinstance(style, str) else [c if isinstance(c, TerminalCode) else TerminalCode.normname(c)  for c in style]
+    if isinstance(style, str) and not all(c in known_styles for c in style):
+        style = [style]
+    s = TerminalCode.retrieve(style[0], "styles")
+    if s is None:
+        raise Exception(f"unknown style: {style[0]}")
+    for c in style[1:]:
+        x = TerminalCode.retrieve(c, "styles")
+        if s is None:
+            raise Exception(f"unknown style: {c}")
+        s += x
+    return s
+
+
+def get_color(
+        foreground: BaseColor | TerminalCode | None = None,
+        background: BaseColor | TerminalCode | None = None,
+        style: list[str] | str = "",
+        terminal_color: str | None = None
+    ):
+    s = get_style(style)
     if terminal_color is None:
         terminal_color = settings["tc"]
 
-    terminal_color = terminal_color.lower() if isinstance(terminal_color, str) else None
-    foreground = foreground.lower() if isinstance(foreground, str) else None
-    background = background.lower() if isinstance(background, str) else None
-
-    fg = known_foreground_colors.get(foreground, foreground or "")
-    fg_is_resolved = repr(fg).startswith("'\\") or not fg
-    bg = known_background_colors.get(background, background or "")
-    bg_is_resolved = repr(bg).startswith("'\\") or not bg
-
-    if not bg_is_resolved:
-        bg_rgb = to_rgb(bg, terminal_color)
-        bg = gen_bg_rgb(*bg_rgb)
-    else:
-        bg_rgb = None
-
-    if not fg_is_resolved:
-        fg_rgb= to_rgb(fg, bg or bg_rgb or "")
-        fg= gen_rgb(*fg_rgb)
-    return s + bg + fg
+    tc = TerminalCode.retrieve(terminal_color, "bg") or to_rgb(terminal_color)
+    bgtc = "" if background is None else (TerminalCode.retrieve(background, "bg") or BGRGBTerminalCode(to_rgb(background, tc)))
+    fgtc = "" if foreground is None else (TerminalCode.retrieve(foreground, "fg") or FGRGBTerminalCode(to_rgb(foreground, background)))
+    return s + bgtc + fgtc
 
 
-
-
-
-
-def demo_color(foreground: str  | None = None, background: str | None = None, style: list[str] | str = "", terminal_color: str | None = None, **kw):
+def demo_color(
+        foreground: BaseColor | TerminalCode | None = None,
+        background: BaseColor | TerminalCode | None = None,
+        style: list[str] | str = "",
+        terminal_color: str | None = None,
+        **kw
+):
     if terminal_color is None:
         terminal_color = settings["tc"]
     c = get_color(foreground=foreground, background=background, style=style, terminal_color=terminal_color)
     s = f"{foreground=}, {background=}, {terminal_color=}, {style=}, {c=}"
     print(c + s + RESET, **kw)
-
-
 
 
 class FGColors:
@@ -397,10 +369,10 @@ class FGColors:
         return get_color(item)
 
     def __dir__(self):
-        return list(known_foreground_colors)
+        return list(TerminalCode.registry.get("fg", {}))
 
     def __iter__(self):
-        return iter(known_foreground_colors)
+        return iter(TerminalCode.registry.get("fg", {}))
 
 class BGColors:
     def __getattr__(self, item):
@@ -410,23 +382,23 @@ class BGColors:
         return get_color(background=item)
 
     def __iter__(self):
-        return iter(known_background_colors)
+        return iter(TerminalCode.registry.get("bg", {}))
 
     def __dir__(self):
-        return list(known_background_colors)
+        return list(TerminalCode.registry.get("bg", {}))
 
 class Styles:
     def __getattr__(self, item):
-        return gen_styles(item)
+        return get_style(item)
 
     def __getitem__(self, item):
-        return gen_styles(item)
+        return get_style(item)
 
     def __iter__(self):
-        return iter(known_styles)
+        return iter(TerminalCode.registry.get("styles", {}))
 
     def __dir__(self):
-        return list(known_styles)
+        return list(TerminalCode.registry.get("styles", {}))
 
 fg = FGColors()
 bg = BGColors()
@@ -460,7 +432,7 @@ class FancyText:
         settings["tc"] = value
 
     def get_item(self, item):
-        s = gen_styles(item)
+        s = get_style(item)
         if s:
             return s
         if item.startswith("bg_"):
@@ -469,9 +441,6 @@ class FancyText:
 
     def __iter__(self):
         return iter({"styles": styles, "fg": fg, "bg": bg})
-
-    def __dir__(self):
-        return list(known_styles)
 
     def full_demo(self):
         for k in self.fg:
@@ -498,6 +467,3 @@ if __name__ == "__main__":
         c.demo_color(k)
 
     c.demo_color("lime", "maroon")
-
-    for s in known_styles:
-        c.demo_color(style=s)
