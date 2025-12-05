@@ -17,7 +17,7 @@ def detect():
     except:
         return "", ""
 
-SAVE_CURSOR_DETECTED, RESTORE_CURSOR_DETECTED = "", ""
+# SAVE_CURSOR_DETECTED, RESTORE_CURSOR_DETECTED = "", ""
 SAVE_CURSOR_DETECTED, RESTORE_CURSOR_DETECTED = detect()
 
 
