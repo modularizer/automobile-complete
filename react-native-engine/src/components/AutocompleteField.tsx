@@ -50,13 +50,9 @@ export default function AutocompleteField({
       <AutocompleteInput
         text={controller.text}
         suggestion={controller.suggestion}
-        onChangeText={(text) => controller.handleTextChange(text)}
-        onKeyPress={(e) => controller.handleKeyPress(e)}
-        onSelectionChange={(selection) => controller.handleSelectionChange(selection)}
+        onChangeText={controller.handleTextChange}
+        onKeyPress={controller.handleKeyPress}
         inputRef={inputRef}
-        onArrowDown={() => controller.handleArrowDown()}
-        onArrowUp={() => controller.handleArrowUp()}
-        onTabOrEnter={() => controller.handleTabOrEnter()}
         maxLines={controller.maxLines}
         theme={theme}
         styles={customStyles?.input}
@@ -67,9 +63,7 @@ export default function AutocompleteField({
           completions={controller.availableCompletions}
           focusedIndex={controller.focusedIndex}
           tabSelectableIndex={controller.tabSelectableIndex}
-          onSelect={(completion: CompletionOption) =>
-            controller.selectCompletion(completion)
-          }
+          onSelect={controller.selectCompletion}
           theme={theme}
           styles={customStyles?.dropdown}
           optionStyles={customStyles?.dropdown?.option}

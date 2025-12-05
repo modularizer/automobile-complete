@@ -7,10 +7,6 @@ interface AutocompleteInputProps {
   suggestion: string;
   onChangeText: (text: string) => void;
   onKeyPress: (e: any) => void;
-  onSelectionChange?: (selection: { start: number; end: number }) => void;
-  onArrowDown?: () => void;
-  onArrowUp?: () => void;
-  onTabOrEnter?: () => void;
   inputRef?: React.RefObject<TextInput | null>;
   maxLines?: number | null;
   theme?: Theme;
@@ -27,10 +23,6 @@ export default function AutocompleteInput({
   suggestion,
   onChangeText,
   onKeyPress,
-  onSelectionChange,
-  onArrowDown,
-  onArrowUp,
-  onTabOrEnter,
   inputRef: externalInputRef,
   maxLines,
   theme,
@@ -41,17 +33,19 @@ export default function AutocompleteInput({
   const [inputHeight, setInputHeight] = useState<number | undefined>(undefined);
   
   const themeStyles = theme?.styles || defaultStyles;
-  const isMultiline = maxLines === null || maxLines > 1;
+  const isMultiline = maxLines === null || (maxLines ?? 1)> 1;
 
   const mergedStyles = {
+      //@ts-ignore
     inputWrapper: [themeStyles.inputWrapper, customStyles?.inputWrapper],
+      //@ts-ignore
     input: [themeStyles.input, customStyles?.input],
+      //@ts-ignore
     visibleText: [themeStyles.visibleText, customStyles?.visibleText],
+      //@ts-ignore
     suggestionText: [themeStyles.suggestionText, customStyles?.suggestionText],
   };
 
-  console.log("[AutocompleteInput] Rendering with text:", text, "suggestion:", suggestion);
-  
   return (
     <View style={mergedStyles.inputWrapper}>
       <TextInput
@@ -61,28 +55,16 @@ export default function AutocompleteInput({
           isMultiline && inputHeight !== undefined && { height: inputHeight },
         ]}
         value={text}
-        onChangeText={(newText) => {
-          // console.log("[AutocompleteInput] onChangeText called with:", newText);
-          onChangeText(newText);
-        }}
+        onChangeText={onChangeText}
         onContentSizeChange={(e) => {
           if (isMultiline) {
             const { height } = e.nativeEvent.contentSize;
             setInputHeight(Math.max(height, 20)); // Minimum height of one line
           }
         }}
-        onKeyPress={(e) => {
-          const key = e.nativeEvent?.key || e.key;
-          if (key === "Enter" && isMultiline) {
-            return;
-          }
-          onKeyPress(e);
-        }}
-        onSelectionChange={(e) => {
-          const { start, end } = e.nativeEvent.selection;
-          onSelectionChange?.({ start, end });
-        }}
+        onKeyPress={onKeyPress}
         placeholder="Start typing..."
+          //@ts-ignore
         placeholderTextColor={themeStyles.placeholderTextColor || "#999"}
         autoFocus
         multiline={isMultiline}
@@ -96,6 +78,7 @@ export default function AutocompleteInput({
             mergedStyles.input,
             isMultiline && inputHeight !== undefined && { height: inputHeight },
             {
+                //@ts-ignore
               caretColor: "#007AFF",
               overflow: "hidden", // Prevent scrolling on web
             },

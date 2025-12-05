@@ -35,7 +35,7 @@ export default function GithubLink({ url, theme, size = 24 }: GithubLinkProps) {
       <div
         style={{ width: size, height: size, display: "flex", alignItems: "center", justifyContent: "center" }}
         dangerouslySetInnerHTML={{
-          __html: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="${githubPath}" fill="${iconColor}"/></svg>`,
+          __html: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="${githubPath}" fill="${String(iconColor)}"/></svg>`,
         }}
       />
     </TouchableOpacity>

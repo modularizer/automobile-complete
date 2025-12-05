@@ -29,8 +29,6 @@ export class AutocompleteTextController {
   private _tabBehavior: TabBehavior = "select-if-single";
   private _tabSpacesCount: number = 2;
   private _maxLines: number | null = null;
-  private _selectionStart: number = 0;
-  private _selectionEnd: number = 0;
 
   private listeners: Set<() => void> = new Set();
 
@@ -45,6 +43,24 @@ export class AutocompleteTextController {
       this._tabSpacesCount = 2;
       this._maxLines = null;
     }
+
+    // bind
+      this.handleArrowDown = this.handleArrowDown.bind(this);
+    this.handleArrowUp = this.handleArrowUp.bind(this);
+    this.handleKeyPress = this.handleKeyPress.bind(this);
+    this.handleTextChange = this.handleTextChange.bind(this);
+    this.handleTabOrEnter = this.handleTabOrEnter.bind(this);
+    this.walkTo = this.walkTo.bind(this);
+    this.selectCompletion = this.selectCompletion.bind(this);
+    this.setInputRef = this.setInputRef.bind(this);
+    this.setMaxCompletions = this.setMaxCompletions.bind(this);
+    this.setTabBehavior = this.setTabBehavior.bind(this);
+    this.setTabSpacesCount = this.setTabSpacesCount.bind(this);
+    this.setMaxLines = this.setMaxLines.bind(this);
+    this.resetToRoot = this.resetToRoot.bind(this);
+    this.subscribe = this.subscribe.bind(this);
+    this.initializeTrie = this.initializeTrie.bind(this);
+    this.acceptCurrentSuggestion = this.acceptCurrentSuggestion.bind(this);
     
     console.log("[AutocompleteTextController] Constructor called, completionList length:", completionList.length);
     this.initializeTrie(completionList);
@@ -176,31 +192,6 @@ export class AutocompleteTextController {
 
   setInputRef(ref: { current: any }) {
     this._inputRef = ref;
-  }
-
-  handleSelectionChange(selection: { start: number; end: number }) {
-    this._selectionStart = selection.start;
-    this._selectionEnd = selection.end;
-  }
-
-  private isCursorAtEnd(): boolean {
-    const textLength = this.text.length;
-    return this._selectionStart === textLength && this._selectionEnd === textLength;
-  }
-
-  handleCharacter(char: string) {
-    if (!this._currentNode) return;
-    this.walkTo(char);
-    this._focusedIndex = null;
-    this.notifyListeners();
-  }
-
-  handleBackspace() {
-    if (!this._currentNode) return;
-    // Walk back incrementally using backspace
-    this.walkTo(BACKSPACE);
-    this._focusedIndex = null;
-    this.notifyListeners();
   }
 
   handleTextChange(newText: string) {
@@ -374,29 +365,6 @@ export class AutocompleteTextController {
       return;
     }
 
-    // Handle simple character input or backspace ONLY if cursor is at the end
-    // This allows us to handle it efficiently via keydown instead of onChangeText
-    if (this.isCursorAtEnd()) {
-      if (key === "Backspace" || key === "Delete") {
-        // Handle it incrementally in the trie
-        this.handleBackspace();
-        // Don't prevent default - let TextInput handle the deletion naturally
-        // handleTextChange will skip it because newText === currentText
-        return;
-      }
-
-      // Handle simple character input - incremental addition
-      // Only handle single printable characters (not control keys)
-      if (key.length === 1 && key !== "\t" && key !== "\n" && key !== "\r") {
-        // Handle it incrementally in the trie
-        this.handleCharacter(key);
-        // Don't prevent default - let TextInput handle the character naturally
-        // handleTextChange will skip it because newText === currentText
-        return;
-      }
-    }
-
-    // For all other cases (cursor not at end, complex keys), let handleTextChange handle it
   }
 }
 

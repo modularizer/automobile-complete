@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Appearance, Platform } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet} from "react-native";
 import { Theme } from "../theme";
 
 export type ThemeMode = "system" | "light" | "dark";

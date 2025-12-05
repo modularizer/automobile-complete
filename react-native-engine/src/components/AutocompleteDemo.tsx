@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, StyleSheet, TextInput, Appearance } from "react-native";
+import { View, Text, TextInput, Appearance } from "react-native";
 import AutocompleteField from "./AutocompleteField";
 import { AutocompleteTextController } from "../engine/AutocompleteTextController";
 import { LightTheme, DarkTheme, Theme } from "../theme";

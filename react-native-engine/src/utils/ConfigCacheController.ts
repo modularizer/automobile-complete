@@ -28,7 +28,7 @@ export class ConfigCacheController<T> {
     this.key = options.key;
     this.defaultValue = options.defaultValue;
     this.urlParamName = options.urlParamName || options.key;
-    this.validate = options.validate || ((value): value is T => value as T);
+    this.validate = options.validate || ((value): value is T => !!value);
     this.serialize = options.serialize || ((value) => String(value));
     this.deserialize = options.deserialize || ((value) => value as T);
   }

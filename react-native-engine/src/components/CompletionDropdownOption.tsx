@@ -78,6 +78,7 @@ export default function CompletionDropdownOption({
     >
       {hasNewlines ? (
         // Multiline rendering: use a single Text component with nested Text for proper wrapping
+          //@ts-ignore
         <Text style={mergedStyles.completionTextContainer}>
           {completion.typedPrefix ? (
             <Text style={[mergedStyles.completionTyped, { backgroundColor: "#e3f2fd" }]}>
