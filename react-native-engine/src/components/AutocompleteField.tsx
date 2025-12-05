@@ -52,6 +52,7 @@ export default function AutocompleteField({
         suggestion={controller.suggestion}
         onChangeText={(text) => controller.handleTextChange(text)}
         onKeyPress={(e) => controller.handleKeyPress(e)}
+        onSelectionChange={(selection) => controller.handleSelectionChange(selection)}
         inputRef={inputRef}
         onArrowDown={() => controller.handleArrowDown()}
         onArrowUp={() => controller.handleArrowUp()}

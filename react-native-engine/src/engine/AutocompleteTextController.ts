@@ -1,5 +1,5 @@
 import { Trie } from "./Trie";
-import { TAB } from "./constants";
+import { TAB, BACKSPACE } from "./constants";
 
 export interface CompletionOption {
   typedPrefix: string;
@@ -29,6 +29,8 @@ export class AutocompleteTextController {
   private _tabBehavior: TabBehavior = "select-if-single";
   private _tabSpacesCount: number = 2;
   private _maxLines: number | null = null;
+  private _selectionStart: number = 0;
+  private _selectionEnd: number = 0;
 
   private listeners: Set<() => void> = new Set();
 
@@ -48,6 +50,21 @@ export class AutocompleteTextController {
     this.initializeTrie(completionList);
   }
 
+  private setCurrentNode(currentNode: Trie | null): void {
+      this._currentNode = currentNode;
+      // Set window.trie for debugging (web environments)
+      if (typeof window !== 'undefined') {
+          (window as any).trie = currentNode;
+      }
+  }
+  private resetToRoot(){
+      // @ts-ignore
+      this.setCurrentNode(this._currentNode.root ?? this._currentNode);
+  }
+  private walkTo(s: string){
+      this.setCurrentNode(this._currentNode!.walk_to(s))
+  }
+
   private notifyListeners() {
     this.listeners.forEach((listener) => listener());
   }
@@ -64,17 +81,8 @@ export class AutocompleteTextController {
     try {
     const t = Trie.fromWords(completionList);
       console.log("[AutocompleteTextController] Trie created, root children:", Object.keys(t.children));
-    this._currentNode = t;
-      console.log("[AutocompleteTextController] Page load - Current node:", {
-        prefix: this._currentNode.prefix,
-        completion: this._currentNode.completion,
-        full_text: this._currentNode.full_text,
-        freq: this._currentNode.freq,
-        children: Object.keys(this._currentNode.children),
-        childrenCount: Object.keys(this._currentNode.children).length,
-        wordsCount: this._currentNode.words?.length || 0,
-        node: this._currentNode,
-      });
+      this.setCurrentNode(t);
+      console.log("[AutocompleteTextController] Page load - Current node:", this._currentNode);
     this.notifyListeners();
     } catch (error) {
       console.error("[AutocompleteTextController] Error initializing trie:", error);
@@ -85,21 +93,12 @@ export class AutocompleteTextController {
   private updateSuggestion(newText: string) {
     if (!this._currentNode) return;
 
-    this._currentNode = this._currentNode.root.walk_to(newText);
+    // FIXME: this is probably slow and unnecessary to walk from root
+    this.resetToRoot();
+    this.walkTo(newText);
     this._focusedIndex = null;
     
-    console.log("[AutocompleteTextController] Keystroke - Current node:", {
-      text: this._currentNode.full_text,
-      prefix: this._currentNode.prefix,
-      completion: this._currentNode.completion,
-      full_text: this._currentNode.full_text,
-      freq: this._currentNode.freq,
-      children: Object.keys(this._currentNode.children),
-      childrenCount: Object.keys(this._currentNode.children).length,
-      suggestion: this._currentNode.completion,
-      availableCompletions: this.availableCompletions.length,
-      node: this._currentNode,
-    });
+    // console.log("[AutocompleteTextController] Keystroke - Current node:", this._currentNode);
   }
 
   get text(): string {
@@ -131,7 +130,7 @@ export class AutocompleteTextController {
     }
 
     // If there's a suggestion, find the option that matches it
-    const suggestion = this._currentNode?.completion;
+    const suggestion = this.suggestion;
     if (suggestion) {
       const matchingIndex = completions.findIndex(
         (opt) => opt.completion === suggestion
@@ -179,10 +178,61 @@ export class AutocompleteTextController {
     this._inputRef = ref;
   }
 
-  handleTextChange(newText: string) {
-    console.log("[AutocompleteTextController] handleTextChange called with:", newText);
-    this.updateSuggestion(newText);
+  handleSelectionChange(selection: { start: number; end: number }) {
+    this._selectionStart = selection.start;
+    this._selectionEnd = selection.end;
+  }
+
+  private isCursorAtEnd(): boolean {
+    const textLength = this.text.length;
+    return this._selectionStart === textLength && this._selectionEnd === textLength;
+  }
+
+  handleCharacter(char: string) {
+    if (!this._currentNode) return;
+    this.walkTo(char);
+    this._focusedIndex = null;
     this.notifyListeners();
+  }
+
+  handleBackspace() {
+    if (!this._currentNode) return;
+    // Walk back incrementally using backspace
+    this.walkTo(BACKSPACE);
+    this._focusedIndex = null;
+    this.notifyListeners();
+  }
+
+  handleTextChange(newText: string) {
+    if (!this._currentNode) {
+      this.updateSuggestion(newText);
+      this.notifyListeners();
+      return;
+    }
+
+    const currentText = this.text;
+    
+    // If text matches, we already handled it via key event - skip
+    if (newText === currentText) {
+      return;
+    }
+    
+    // Otherwise, handle it (simple append/delete or complex edit)
+    if (newText.startsWith(currentText) && newText.length > currentText.length) {
+      // Simple append
+      this.walkTo(newText.slice(currentText.length));
+      this._focusedIndex = null;
+      this.notifyListeners();
+    } else if (currentText.startsWith(newText) && newText.length < currentText.length) {
+      // Simple delete
+      this.walkTo(BACKSPACE.repeat(currentText.length - newText.length));
+      this._focusedIndex = null;
+      this.notifyListeners();
+    } else {
+      // Complex edit - reset to root
+      this.updateSuggestion(newText);
+      this.notifyListeners();
+    }
   }
 
   handleArrowDown() {
@@ -212,7 +262,7 @@ export class AutocompleteTextController {
 
     // Walk from current node to append the remaining prefix and completion
     const textToAppend = completion.remainingPrefix + completion.completion;
-    this._currentNode = this._currentNode.walk_to(textToAppend);
+    this.walkTo(textToAppend);
     this._focusedIndex = null;
     this.notifyListeners();
 
@@ -223,10 +273,10 @@ export class AutocompleteTextController {
   }
 
   acceptCurrentSuggestion() {
-    if (!this._currentNode?.completion) return;
+    if (!this.suggestion) return;
 
     // Walk from current node with TAB - Trie handles everything
-    this._currentNode = this._currentNode.walk_to(TAB);
+    this.walkTo(TAB);
     this._focusedIndex = null;
     this.notifyListeners();
 
@@ -249,15 +299,15 @@ export class AutocompleteTextController {
     }
 
     // Handle different tab behaviors when no suggestion is available
-    if (!this._currentNode?.completion) {
+    if (!this.suggestion) {
       switch (this._tabBehavior) {
         case "insert-tab":
-          this.updateSuggestion(this._currentNode.full_text + TAB);
+          this.walkTo(TAB);
           this.notifyListeners();
           return;
 
         case "insert-spaces":
-          this.updateSuggestion(this._currentNode.full_text + " ".repeat(this._tabSpacesCount));
+          this.walkTo(" ".repeat(this._tabSpacesCount));
           this.notifyListeners();
           return;
 
@@ -279,7 +329,7 @@ export class AutocompleteTextController {
     }
 
     // If we have a suggestion, accept it
-    if (this._currentNode?.completion) {
+    if (this.suggestion) {
       this.acceptCurrentSuggestion();
       return;
     }
@@ -321,7 +371,32 @@ export class AutocompleteTextController {
         this.handleTabOrEnter();
       }
       // If multiline, allow Enter to create newline (don't prevent default)
+      return;
     }
+
+    // Handle simple character input or backspace ONLY if cursor is at the end
+    // This allows us to handle it efficiently via keydown instead of onChangeText
+    if (this.isCursorAtEnd()) {
+      if (key === "Backspace" || key === "Delete") {
+        // Handle it incrementally in the trie
+        this.handleBackspace();
+        // Don't prevent default - let TextInput handle the deletion naturally
+        // handleTextChange will skip it because newText === currentText
+        return;
+      }
+
+      // Handle simple character input - incremental addition
+      // Only handle single printable characters (not control keys)
+      if (key.length === 1 && key !== "\t" && key !== "\n" && key !== "\r") {
+        // Handle it incrementally in the trie
+        this.handleCharacter(key);
+        // Don't prevent default - let TextInput handle the character naturally
+        // handleTextChange will skip it because newText === currentText
+        return;
+      }
+    }
+
+    // For all other cases (cursor not at end, complex keys), let handleTextChange handle it
   }
 }
 

@@ -7,6 +7,7 @@ interface AutocompleteInputProps {
   suggestion: string;
   onChangeText: (text: string) => void;
   onKeyPress: (e: any) => void;
+  onSelectionChange?: (selection: { start: number; end: number }) => void;
   onArrowDown?: () => void;
   onArrowUp?: () => void;
   onTabOrEnter?: () => void;
@@ -26,6 +27,7 @@ export default function AutocompleteInput({
   suggestion,
   onChangeText,
   onKeyPress,
+  onSelectionChange,
   onArrowDown,
   onArrowUp,
   onTabOrEnter,
@@ -40,37 +42,6 @@ export default function AutocompleteInput({
   
   const themeStyles = theme?.styles || defaultStyles;
   const isMultiline = maxLines === null || maxLines > 1;
-
-  const handleWebKeyDown = (e: any) => {
-    const key = e.key;
-
-    // Handle arrow keys for navigation
-    if (key === "ArrowDown") {
-      e.preventDefault();
-      onArrowDown?.();
-      return;
-    }
-
-    if (key === "ArrowUp") {
-      e.preventDefault();
-      onArrowUp?.();
-      return;
-    }
-
-    // Handle Tab or Enter key to accept completion or focused option
-    // Only prevent default on Enter if multiline is disabled (single-line mode)
-    if (key === "Tab") {
-      e.preventDefault();
-      onTabOrEnter?.();
-    } else if (key === "Enter") {
-      const isMultiline = maxLines === null || maxLines > 1;
-      if (!isMultiline) {
-        e.preventDefault();
-        onTabOrEnter?.();
-      }
-      // If multiline, allow Enter to create newline (don't prevent default)
-    }
-  };
 
   const mergedStyles = {
     inputWrapper: [themeStyles.inputWrapper, customStyles?.inputWrapper],
@@ -91,7 +62,7 @@ export default function AutocompleteInput({
         ]}
         value={text}
         onChangeText={(newText) => {
-          console.log("[AutocompleteInput] onChangeText called with:", newText);
+          // console.log("[AutocompleteInput] onChangeText called with:", newText);
           onChangeText(newText);
         }}
         onContentSizeChange={(e) => {
@@ -102,12 +73,14 @@ export default function AutocompleteInput({
         }}
         onKeyPress={(e) => {
           const key = e.nativeEvent?.key || e.key;
-          // Don't call controller's onKeyPress for Enter when multiline is enabled
-          // This allows Enter to insert a newline naturally
           if (key === "Enter" && isMultiline) {
-            return; // Let Enter work naturally for multiline
+            return;
           }
           onKeyPress(e);
+        }}
+        onSelectionChange={(e) => {
+          const { start, end } = e.nativeEvent.selection;
+          onSelectionChange?.({ start, end });
         }}
         placeholder="Start typing..."
         placeholderTextColor={themeStyles.placeholderTextColor || "#999"}
@@ -119,7 +92,6 @@ export default function AutocompleteInput({
         {...(Platform.OS === "ios" && { cursorColor: "#007AFF" })}
         {...(Platform.OS === "android" && { underlineColorAndroid: "transparent" })}
         {...(Platform.OS === "web" && {
-          onKeyDown: handleWebKeyDown,
           style: [
             mergedStyles.input,
             isMultiline && inputHeight !== undefined && { height: inputHeight },
