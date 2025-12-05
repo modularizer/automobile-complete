@@ -276,8 +276,9 @@ export class CoreTrie {
           continue;
         }
         const [pre, ...postParts] = line.split("|");
-        const post = postParts.join("|"); // In case there are multiple | characters
-        this.insert_pair(pre, post, freq);
+        const post = postParts.join("|").trim(); // Trim trailing/leading spaces from completion
+        const preTrimmed = pre.trim(); // Also trim prefix to be safe
+        this.insert_pair(preTrimmed, post, freq);
       }
     }
     return this;
@@ -286,10 +287,13 @@ export class CoreTrie {
   insert_pair(pre: string, post: string, freq: number = 1): void {
     let node: CoreTrie = this;
     const root = this.root;
+    const ci = this.case_insensitive;
 
     for (const ch of pre) {
-      if (ch in node.children) {
-        const child = node.children[ch];
+      // Use lowercase key for case-insensitive matching (same as walk_to)
+      const k = ci ? ch.toLowerCase() : ch;
+      if (k in node.children) {
+        const child = node.children[k];
         node = child;
       } else {
         // very lightweight child creation
@@ -300,7 +304,7 @@ export class CoreTrie {
           parent: node,
           prefix: node.prefix + ch,
         });
-        node.children[ch] = child;
+        node.children[k] = child;
         node = child;
       }
     }
@@ -343,16 +347,18 @@ export class CoreTrie {
    * Get all word completions available from this node.
    * Collects all words in the subtree starting from this node.
    * 
-   * @returns Array of objects with prefix and completion (postfix) strings
+   * @param maxCompletions - Maximum number of completions to return. If provided, returns the most frequent ones.
+   * @returns Array of objects with prefix and completion (postfix) strings, sorted by frequency (descending)
    */
-  list_options(): Array<{ prefix: string; completion: string }> {
-    const options: Array<{ prefix: string; completion: string }> = [];
+  list_options(maxCompletions?: number): Array<{ prefix: string; completion: string; freq: number }> {
+    const options: Array<{ prefix: string; completion: string; freq: number }> = [];
     
     // If this node has a completion, add it
     if (this.completion) {
       options.push({
         prefix: this.prefix,
         completion: this.completion,
+        freq: this.freq,
       });
     }
     
@@ -361,7 +367,59 @@ export class CoreTrie {
       options.push(...child.list_options());
     }
     
+    // Sort by frequency (descending) to favor most likely
+    options.sort((a, b) => b.freq - a.freq);
+    
+    // Limit to maxCompletions if provided
+    if (maxCompletions !== undefined && maxCompletions > 0) {
+      return options.slice(0, maxCompletions);
+    }
+    
     return options;
+  }
+
+  /**
+   * Get completion options formatted for display with highlighting information.
+   * Splits each option into typedPrefix (matching current node prefix), remainingPrefix, and completion.
+   * 
+   * @param maxCompletions - Maximum number of completions to return. If provided, returns the most frequent ones.
+   * @returns Array of objects with typedPrefix, remainingPrefix, and completion strings
+   */
+  completionOptions(maxCompletions?: number): Array<{ typedPrefix: string; remainingPrefix: string; completion: string }> {
+    const currentNodePrefix = this.prefix.toLowerCase();
+    const options = this.list_options(maxCompletions);
+    
+    return options.map((opt) => {
+      const fullPrefix = opt.prefix;
+      const prefixLower = fullPrefix.toLowerCase();
+      
+      // Find how much of the prefix matches the current node's prefix
+      let matchedLength = 0;
+      for (let i = 0; i < Math.min(currentNodePrefix.length, prefixLower.length); i++) {
+        if (currentNodePrefix[i] === prefixLower[i]) {
+          matchedLength++;
+        } else {
+          break;
+        }
+      }
+      
+      return {
+        typedPrefix: fullPrefix.substring(0, matchedLength), // Part matching current node prefix (black with highlight)
+        remainingPrefix: fullPrefix.substring(matchedLength), // Rest of prefix (black, no highlight)
+        completion: opt.completion, // Completion (grey)
+      };
+    });
+  }
+
+  /**
+   * Select a completion option and navigate to the resulting node.
+   * 
+   * @param completion - Completion option with typedPrefix, remainingPrefix, and completion
+   * @returns The node reached after selecting the completion
+   */
+  selectCompletion(completion: { typedPrefix: string; remainingPrefix: string; completion: string }): CoreTrie {
+    const fullWord = completion.typedPrefix + completion.remainingPrefix + completion.completion;
+    return this.root.walk_to(fullWord);
   }
 }
 
