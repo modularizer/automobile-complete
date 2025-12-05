@@ -5,10 +5,11 @@ import { AutocompleteTextController } from "../engine/AutocompleteTextController
 import { LightTheme, DarkTheme, Theme } from "../theme";
 import ThemeSelector, { ThemeMode } from "./ThemeSelector";
 import { ConfigCacheController } from "../utils/ConfigCacheController";
+import GithubLink from "./GithubLink";
 
 // Sample completion list data
 const SAMPLE_COMPLETIONS = `
-We|lcome! to "automobile-complete".
+We|lcome to "automobile-complete"!
 A d|umb, fast, offline, hard-coded autocomplete engine
 U|se python to generate a human-readable completionlist
 Contr|ol fine-toothed params to adjust what completions you want
@@ -135,7 +136,14 @@ export default function AutocompleteDemo({
   return (
     <View style={activeTheme.styles.demoContainer}>
       <View style={activeTheme.styles.demoHeader}>
-        <Text style={activeTheme.styles.demoTitle}>Automobile-Complete</Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <GithubLink
+            url="https://github.com/modularizer/automobile-complete"
+            theme={activeTheme}
+            size={24}
+          />
+          <Text style={[activeTheme.styles.demoTitle, { marginLeft: 12 }]}>Automobile-Complete</Text>
+        </View>
         {showThemeSelector && (
           <ThemeSelector
             currentMode={themeMode}

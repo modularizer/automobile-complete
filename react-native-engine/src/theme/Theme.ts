@@ -6,6 +6,7 @@ export interface ThemeStyles {
   input: TextStyle;
   visibleText: TextStyle;
   suggestionText: TextStyle;
+  placeholderTextColor?: string;
 
   // CompletionDropdown styles
   dropdownContainer: ViewStyle;

@@ -30,6 +30,7 @@ export class LightTheme extends Theme {
       lineHeight: 20, // Match input lineHeight
       color: "#999",
     },
+    placeholderTextColor: "#999",
 
     // CompletionDropdown styles
     dropdownContainer: {
@@ -46,12 +47,12 @@ export class LightTheme extends Theme {
       shadowOpacity: 0.1,
       shadowRadius: 4,
       elevation: 3, // For Android
-      maxHeight: 300,
+      maxHeight: 500,
       width: "100%",
       overflow: "hidden",
     },
     completionsList: {
-      maxHeight: 300,
+      maxHeight: 500,
     },
 
     // CompletionDropdownOption styles

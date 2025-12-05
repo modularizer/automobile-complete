@@ -110,6 +110,7 @@ export default function AutocompleteInput({
           onKeyPress(e);
         }}
         placeholder="Start typing..."
+        placeholderTextColor={themeStyles.placeholderTextColor || "#999"}
         autoFocus
         multiline={isMultiline}
         scrollEnabled={false}
