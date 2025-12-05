@@ -330,7 +330,8 @@ class Node:
                 words.sort(key=lambda x: x[0])  # Alphabetical by word
             else:
                 # Sort by node attribute (freq or sum_freq), descending
-                words.sort(key=lambda x: getattr(x[1], sort_by), reverse=True)
+                # Use word_id (original index) as tiebreaker when frequencies are equal
+                words.sort(key=lambda x: (-getattr(x[1], sort_by), x[1].word_id if x[1].word_id is not None else float('inf')))
 
         # Return top n words
         return words[:n]

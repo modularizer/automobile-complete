@@ -157,9 +157,9 @@ def merge_completions(
                 tries[trie_index].disable(pre, post)
     
     # Collect final completions from all tries (excluding disabled ones)
-    final_completions: dict[tuple[str, str], float] = {}
+    final_completions: dict[tuple[str, str], tuple[float, int]] = {}
     for trie_index, (trie, completions, weight) in enumerate(zip(tries, all_completions, actual_weights)):
-        for pre, post, freq in completions:
+        for completion_index, (pre, post, freq) in enumerate(completions):
             # Check if this completion is disabled
             node = trie
             is_disabled = False
@@ -179,12 +179,17 @@ def merge_completions(
                 weighted_freq = freq * weight
                 key = (pre, post)
                 # Sum frequencies if same prefix|completion appears in multiple files
-                final_completions[key] = final_completions.get(key, 0.0) + weighted_freq
+                # Track the minimum original index for tiebreaking
+                existing = final_completions.get(key, (0.0, float('inf')))
+                # Use the minimum index (earliest occurrence) as tiebreaker
+                min_index = min(existing[1], completion_index)
+                final_completions[key] = (existing[0] + weighted_freq, min_index)
     
     # Format output
     output_lines = []
-    for (pre, post), weighted_freq in sorted(
-        final_completions.items(), key=lambda x: x[1], reverse=True
+    # Sort by frequency (descending), then by original index (ascending) as tiebreaker
+    for (pre, post), (weighted_freq, orig_index) in sorted(
+        final_completions.items(), key=lambda x: (-x[1][0], x[1][1])
     ):
         if include_freqs:
             rounded_freq = int(round(weighted_freq))

@@ -18,18 +18,17 @@ export interface AutocompleteTextControllerOptions {
   maxCompletions?: number;
   tabBehavior?: TabBehavior;
   tabSpacesCount?: number; // Number of spaces to insert when tabBehavior is "insert-spaces"
+  maxLines?: number | null; // Maximum number of lines. null or >1 allows multiline, 1 is single-line
 }
 
 export class AutocompleteTextController {
-  private _text: string = "";
-  private _suggestion: string = "";
-  private _trieRoot: Trie | null = null;
   private _currentNode: Trie | null = null;
   private _focusedIndex: number | null = null;
   private _inputRef: { current: any } | null = null;
   private _maxCompletions: number | undefined = undefined;
   private _tabBehavior: TabBehavior = "select-if-single";
   private _tabSpacesCount: number = 2;
+  private _maxLines: number | null = null;
 
   private listeners: Set<() => void> = new Set();
 
@@ -38,9 +37,11 @@ export class AutocompleteTextController {
       this._maxCompletions = options.maxCompletions;
       this._tabBehavior = options.tabBehavior || "select-if-single";
       this._tabSpacesCount = options.tabSpacesCount || 2;
+      this._maxLines = options.maxLines !== undefined ? options.maxLines : null;
     } else {
       this._tabBehavior = "select-if-single";
       this._tabSpacesCount = 2;
+      this._maxLines = null;
     }
     
     console.log("[AutocompleteTextController] Constructor called, completionList length:", completionList.length);
@@ -63,9 +64,7 @@ export class AutocompleteTextController {
     try {
       const t = Trie.fromWords(completionList);
       console.log("[AutocompleteTextController] Trie created, root children:", Object.keys(t.children));
-      this._trieRoot = t;
       this._currentNode = t;
-      this._text = "";
       console.log("[AutocompleteTextController] Page load - Current node:", {
         prefix: this._currentNode.prefix,
         completion: this._currentNode.completion,
@@ -76,7 +75,6 @@ export class AutocompleteTextController {
         wordsCount: this._currentNode.words?.length || 0,
         node: this._currentNode,
       });
-      this.updateSuggestion();
       this.notifyListeners();
     } catch (error) {
       console.error("[AutocompleteTextController] Error initializing trie:", error);
@@ -84,36 +82,32 @@ export class AutocompleteTextController {
     }
   }
 
-  private updateSuggestion() {
-    if (!this._trieRoot) return;
+  private updateSuggestion(newText: string) {
+    if (!this._currentNode) return;
 
-    // Walk through the trie with current text from root
-    const node = this._trieRoot.walk_to(this._text);
-    this._currentNode = node;
-    this._suggestion = node.completion || "";
-    // Reset focused index when text changes
+    this._currentNode = this._currentNode.root.walk_to(newText);
     this._focusedIndex = null;
     
     console.log("[AutocompleteTextController] Keystroke - Current node:", {
-      text: this._text,
-      prefix: node.prefix,
-      completion: node.completion,
-      full_text: node.full_text,
-      freq: node.freq,
-      children: Object.keys(node.children),
-      childrenCount: Object.keys(node.children).length,
-      suggestion: this._suggestion,
+      text: this._currentNode.full_text,
+      prefix: this._currentNode.prefix,
+      completion: this._currentNode.completion,
+      full_text: this._currentNode.full_text,
+      freq: this._currentNode.freq,
+      children: Object.keys(this._currentNode.children),
+      childrenCount: Object.keys(this._currentNode.children).length,
+      suggestion: this._currentNode.completion,
       availableCompletions: this.availableCompletions.length,
-      node: node,
+      node: this._currentNode,
     });
   }
 
   get text(): string {
-    return this._text;
+    return this._currentNode?.full_text || "";
   }
 
   get suggestion(): string {
-    return this._suggestion;
+    return this._currentNode?.completion || "";
   }
 
   get currentNode(): Trie | null {
@@ -137,9 +131,10 @@ export class AutocompleteTextController {
     }
 
     // If there's a suggestion, find the option that matches it
-    if (this._suggestion) {
+    const suggestion = this._currentNode?.completion;
+    if (suggestion) {
       const matchingIndex = completions.findIndex(
-        (opt) => opt.completion === this._suggestion
+        (opt) => opt.completion === suggestion
       );
       if (matchingIndex !== -1) {
         return matchingIndex;
@@ -171,14 +166,22 @@ export class AutocompleteTextController {
     this._tabSpacesCount = count;
   }
 
+  get maxLines(): number | null {
+    return this._maxLines;
+  }
+
+  setMaxLines(maxLines: number | null) {
+    this._maxLines = maxLines;
+    this.notifyListeners();
+  }
+
   setInputRef(ref: { current: any }) {
     this._inputRef = ref;
   }
 
   handleTextChange(newText: string) {
     console.log("[AutocompleteTextController] handleTextChange called with:", newText);
-    this._text = newText;
-    this.updateSuggestion();
+    this.updateSuggestion(newText);
     this.notifyListeners();
   }
 
@@ -207,10 +210,9 @@ export class AutocompleteTextController {
   selectCompletion(completion: CompletionOption) {
     if (!this._currentNode) return;
 
-    const node = this._currentNode.selectCompletion(completion);
-    this._text = node.full_text;
-    this._currentNode = node;
-    this._suggestion = node.completion || "";
+    // Walk from current node to append the remaining prefix and completion
+    const textToAppend = completion.remainingPrefix + completion.completion;
+    this._currentNode = this._currentNode.walk_to(textToAppend);
     this._focusedIndex = null;
     this.notifyListeners();
 
@@ -221,12 +223,11 @@ export class AutocompleteTextController {
   }
 
   acceptCurrentSuggestion() {
-    if (!this._suggestion || !this._currentNode) return;
+    if (!this._currentNode?.completion) return;
 
-    const node = this._currentNode.walk_to(TAB);
-    this._text = node.full_text;
-    this._currentNode = node;
-    this._suggestion = node.completion || "";
+    // Walk from current node with TAB - Trie handles everything
+    this._currentNode = this._currentNode.walk_to(TAB);
+    this._focusedIndex = null;
     this.notifyListeners();
 
     // Refocus the input
@@ -248,17 +249,15 @@ export class AutocompleteTextController {
     }
 
     // Handle different tab behaviors when no suggestion is available
-    if (!this._suggestion) {
+    if (!this._currentNode?.completion) {
       switch (this._tabBehavior) {
         case "insert-tab":
-          this._text += TAB;
-          this.updateSuggestion();
+          this.updateSuggestion(this._currentNode.full_text + TAB);
           this.notifyListeners();
           return;
 
         case "insert-spaces":
-          this._text += " ".repeat(this._tabSpacesCount);
-          this.updateSuggestion();
+          this.updateSuggestion(this._currentNode.full_text + " ".repeat(this._tabSpacesCount));
           this.notifyListeners();
           return;
 
@@ -280,7 +279,7 @@ export class AutocompleteTextController {
     }
 
     // If we have a suggestion, accept it
-    if (this._suggestion) {
+    if (this._currentNode?.completion) {
       this.acceptCurrentSuggestion();
       return;
     }
@@ -292,25 +291,36 @@ export class AutocompleteTextController {
   }
 
   handleKeyPress(e: any) {
-    const key = e.nativeEvent.key;
+    const key = e.nativeEvent?.key || e.key;
 
     // Handle arrow keys for navigation
     if (key === "ArrowDown") {
-      e.preventDefault();
+      e.preventDefault?.();
       this.handleArrowDown();
       return;
     }
 
     if (key === "ArrowUp") {
-      e.preventDefault();
+      e.preventDefault?.();
       this.handleArrowUp();
       return;
     }
 
     // Handle Tab key to accept completion or focused option
     if (key === "Tab") {
-      e.preventDefault();
+      e.preventDefault?.();
       this.handleTabOrEnter();
+      return;
+    }
+
+    // Handle Enter key - only prevent default if single-line mode
+    if (key === "Enter") {
+      const isMultiline = this._maxLines === null || this._maxLines > 1;
+      if (!isMultiline) {
+        e.preventDefault?.();
+        this.handleTabOrEnter();
+      }
+      // If multiline, allow Enter to create newline (don't prevent default)
     }
   }
 }

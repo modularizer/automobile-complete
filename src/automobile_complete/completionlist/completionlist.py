@@ -87,27 +87,29 @@ def build_completionlist(
     if completion_map is None:
         completion_map = {}
     
-    # Format completions
-    output_lines = []
+    # Format completions with original index for tiebreaking
+    output_lines_with_index = []
     for word, prefix_completion in completion_map.items():
         # prefix_completion is a list [prefix, completion]
         prefix, completion = prefix_completion[0], prefix_completion[1]
         # Find frequency for this word
         word_freq = word_freq_dict.get(word, 1.0)
+        # Find original index in wordlist
+        word_index = next((i for i, (w, _) in enumerate(all_words) if w == word), len(all_words))
         
         if preserve_freqs:
             rounded_freq = int(round(word_freq))
-            output_lines.append(f"{prefix}|{completion} #{rounded_freq}")
+            output_lines_with_index.append((f"{prefix}|{completion} #{rounded_freq}", rounded_freq, word_index))
         else:
-            output_lines.append(f"{prefix}|{completion}")
+            output_lines_with_index.append((f"{prefix}|{completion}", word_freq, word_index))
     
-    # Sort by frequency (descending)
-    output_lines.sort(
-        key=lambda line: (
-            int(re.search(r"#(\d+)$", line).group(1)) if re.search(r"#(\d+)$", line) else 0
-        ) if preserve_freqs else 0,
-        reverse=True
+    # Sort by frequency (descending), then by original index (ascending) as tiebreaker
+    output_lines_with_index.sort(
+        key=lambda x: (-x[1], x[2])  # Negative freq for descending, index for ascending
     )
+    
+    # Extract just the lines
+    output_lines = [line for line, _, _ in output_lines_with_index]
     
     # Write output
     if output_file:

@@ -8,14 +8,14 @@ import { ConfigCacheController } from "../utils/ConfigCacheController";
 
 // Sample completion list data
 const SAMPLE_COMPLETIONS = `
-We|lcome! to "automobile-complete".  #5
-Th|is project demos a fast, offline, super dumb autocompletion method  #5
-Basic|ally, we preprocess a completion tree using python  #5
-Th|en, we can load in our list and use it with a text controller  #5
-Is it the best solution?| no. probably not  #5
-Is it super si|mple to hardcode the exact completions you want? Yes.  #5
-Is it customiz|able? Yes.  #5
-Se|e more at https://github.com/modularizer/automobile-complete  #5
+We|lcome! to "automobile-complete".
+Th|is project demos a fast, offline, super dumb autocompletion method
+Basic|ally, we preprocess a completion tree using python
+Th|en, we can load in our list and use it with a text controller
+Is it the best solution?| no. probably not
+Is it super si|mple to hardcode the exact completions you want? Yes.
+Is it customiz|able? Yes.
+Se|e more at https://github.com/modularizer/automobile-complete
 
 
 `;

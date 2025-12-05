@@ -56,6 +56,7 @@ export default function AutocompleteField({
         onArrowDown={() => controller.handleArrowDown()}
         onArrowUp={() => controller.handleArrowUp()}
         onTabOrEnter={() => controller.handleTabOrEnter()}
+        maxLines={controller.maxLines}
         theme={theme}
         styles={customStyles?.input}
       />

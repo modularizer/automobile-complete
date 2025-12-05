@@ -58,6 +58,12 @@ export default function CompletionDropdownOption({
   // Style as focused if actually focused OR if it's the tab-selectable option
   const shouldShowFocused = isFocused || isTabSelectable;
 
+  // Check if any part contains newlines
+  const hasNewlines =
+    completion.typedPrefix.includes("\n") ||
+    completion.remainingPrefix.includes("\n") ||
+    completion.completion.includes("\n");
+
   return (
     <TouchableOpacity
       key={index}
@@ -68,19 +74,41 @@ export default function CompletionDropdownOption({
       onPress={() => onSelect(completion)}
       activeOpacity={0.7}
     >
-      {completion.typedPrefix ? (
-        <View style={mergedStyles.highlightContainer}>
-          <Text style={mergedStyles.completionTyped}>{completion.typedPrefix}</Text>
-        </View>
-      ) : null}
-      {completion.remainingPrefix ? (
-        <Text style={mergedStyles.completionRemainingPrefix}>
-          {completion.remainingPrefix}
+      {hasNewlines ? (
+        // Multiline rendering: use a single Text component with nested Text for proper wrapping
+        <Text style={mergedStyles.completionTextContainer}>
+          {completion.typedPrefix ? (
+            <Text style={[mergedStyles.completionTyped, { backgroundColor: "#e3f2fd" }]}>
+              {completion.typedPrefix}
+            </Text>
+          ) : null}
+          {completion.remainingPrefix ? (
+            <Text style={mergedStyles.completionRemainingPrefix}>
+              {completion.remainingPrefix}
+            </Text>
+          ) : null}
+          {completion.completion ? (
+            <Text style={mergedStyles.completionPostfix}>{completion.completion}</Text>
+          ) : null}
         </Text>
-      ) : null}
-      {completion.completion ? (
-        <Text style={mergedStyles.completionPostfix}>{completion.completion}</Text>
-      ) : null}
+      ) : (
+        // Single-line rendering: use separate components for highlight container
+        <>
+          {completion.typedPrefix ? (
+            <View style={mergedStyles.highlightContainer}>
+              <Text style={mergedStyles.completionTyped}>{completion.typedPrefix}</Text>
+            </View>
+          ) : null}
+          {completion.remainingPrefix ? (
+            <Text style={mergedStyles.completionRemainingPrefix}>
+              {completion.remainingPrefix}
+            </Text>
+          ) : null}
+          {completion.completion ? (
+            <Text style={mergedStyles.completionPostfix}>{completion.completion}</Text>
+          ) : null}
+        </>
+      )}
     </TouchableOpacity>
   );
 }
@@ -92,7 +120,8 @@ const defaultStyles = StyleSheet.create({
     paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
-    alignItems: "center",
+    alignItems: "flex-start", // Changed from "center" to "flex-start" for multiline alignment
+    flexWrap: "wrap", // Allow wrapping for multiline content
     cursor: "pointer",
   },
   completionItemFocused: {
@@ -102,6 +131,11 @@ const defaultStyles = StyleSheet.create({
     backgroundColor: "#e3f2fd", // Light blue background to highlight
     borderRadius: 3,
     paddingHorizontal: 0,
+  },
+  completionTextContainer: {
+    fontSize: 14,
+    flex: 1,
+    flexWrap: "wrap",
   },
   completionTyped: {
     fontSize: 14,

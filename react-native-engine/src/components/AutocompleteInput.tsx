@@ -11,6 +11,7 @@ interface AutocompleteInputProps {
   onArrowUp?: () => void;
   onTabOrEnter?: () => void;
   inputRef?: React.RefObject<TextInput | null>;
+  maxLines?: number | null;
   theme?: Theme;
   styles?: {
     inputWrapper?: ViewStyle;
@@ -29,6 +30,7 @@ export default function AutocompleteInput({
   onArrowUp,
   onTabOrEnter,
   inputRef: externalInputRef,
+  maxLines,
   theme,
   styles: customStyles,
 }: AutocompleteInputProps) {
@@ -54,9 +56,17 @@ export default function AutocompleteInput({
     }
 
     // Handle Tab or Enter key to accept completion or focused option
-    if (key === "Tab" || key === "Enter") {
+    // Only prevent default on Enter if multiline is disabled (single-line mode)
+    if (key === "Tab") {
       e.preventDefault();
       onTabOrEnter?.();
+    } else if (key === "Enter") {
+      const isMultiline = maxLines === null || maxLines > 1;
+      if (!isMultiline) {
+        e.preventDefault();
+        onTabOrEnter?.();
+      }
+      // If multiline, allow Enter to create newline (don't prevent default)
     }
   };
 
@@ -79,10 +89,20 @@ export default function AutocompleteInput({
           console.log("[AutocompleteInput] onChangeText called with:", newText);
           onChangeText(newText);
         }}
-        onKeyPress={onKeyPress}
+        onKeyPress={(e) => {
+          const key = e.nativeEvent?.key || e.key;
+          const isMultiline = maxLines === null || maxLines > 1;
+          // Don't call controller's onKeyPress for Enter when multiline is enabled
+          // This allows Enter to insert a newline naturally
+          if (key === "Enter" && isMultiline) {
+            return; // Let Enter work naturally for multiline
+          }
+          onKeyPress(e);
+        }}
         placeholder="Start typing..."
         autoFocus
-        multiline={false}
+        multiline={maxLines === null || maxLines > 1}
+        numberOfLines={maxLines === null ? undefined : maxLines}
         selectionColor="#007AFF"
         {...(Platform.OS === "ios" && { cursorColor: "#007AFF" })}
         {...(Platform.OS === "android" && { underlineColorAndroid: "transparent" })}

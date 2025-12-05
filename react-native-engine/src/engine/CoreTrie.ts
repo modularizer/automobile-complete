@@ -350,8 +350,8 @@ export class CoreTrie {
    * @param maxCompletions - Maximum number of completions to return. If provided, returns the most frequent ones.
    * @returns Array of objects with prefix and completion (postfix) strings, sorted by frequency (descending)
    */
-  list_options(maxCompletions?: number): Array<{ prefix: string; completion: string; freq: number }> {
-    const options: Array<{ prefix: string; completion: string; freq: number }> = [];
+  list_options(maxCompletions?: number): Array<{ prefix: string; completion: string; freq: number; index: number | null }> {
+    const options: Array<{ prefix: string; completion: string; freq: number; index: number | null }> = [];
     
     // If this node has a completion, add it
     if (this.completion) {
@@ -359,6 +359,7 @@ export class CoreTrie {
         prefix: this.prefix,
         completion: this.completion,
         freq: this.freq,
+        index: this.index,
       });
     }
     
@@ -367,8 +368,16 @@ export class CoreTrie {
       options.push(...child.list_options());
     }
     
-    // Sort by frequency (descending) to favor most likely
-    options.sort((a, b) => b.freq - a.freq);
+    // Sort by frequency (descending), then by index (ascending) as tiebreaker
+    options.sort((a, b) => {
+      if (b.freq !== a.freq) {
+        return b.freq - a.freq;
+      }
+      // If frequencies are equal, sort by index (lower index first)
+      const aIndex = a.index ?? Infinity;
+      const bIndex = b.index ?? Infinity;
+      return aIndex - bIndex;
+    });
     
     // Limit to maxCompletions if provided
     if (maxCompletions !== undefined && maxCompletions > 0) {
@@ -390,6 +399,7 @@ export class CoreTrie {
     const options = this.list_options(maxCompletions);
     
     return options.map((opt) => {
+      // Extract just the fields we need (ignore index for display)
       const fullPrefix = opt.prefix;
       const prefixLower = fullPrefix.toLowerCase();
       
