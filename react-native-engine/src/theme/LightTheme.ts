@@ -15,16 +15,19 @@ export class LightTheme extends Theme {
       borderRadius: 8,
       padding: 12,
       fontSize: 16,
+      lineHeight: 20, // Match line height for proper single-line start
       backgroundColor: "#fff",
-      minHeight: 44,
       color: "rgba(0,0,0,0.01)", // Almost transparent but allows cursor
+      // Height will be controlled dynamically for multiline expansion
     },
     visibleText: {
       fontSize: 16,
+      lineHeight: 20, // Match input lineHeight
       color: "#000",
     },
     suggestionText: {
       fontSize: 16,
+      lineHeight: 20, // Match input lineHeight
       color: "#999",
     },
 

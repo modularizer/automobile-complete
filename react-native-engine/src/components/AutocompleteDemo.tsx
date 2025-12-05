@@ -9,15 +9,19 @@ import { ConfigCacheController } from "../utils/ConfigCacheController";
 // Sample completion list data
 const SAMPLE_COMPLETIONS = `
 We|lcome! to "automobile-complete".
-Th|is project demos a fast, offline, super dumb autocompletion method
-Basic|ally, we preprocess a completion tree using python
-Th|en, we can load in our list and use it with a text controller
-Is it the best solution?| no. probably not
-Is it super si|mple to hardcode the exact completions you want? Yes.
-Is it customiz|able? Yes.
-Se|e more at https://github.com/modularizer/automobile-complete
-
-
+A d|umb, fast, offline, hard-coded autocomplete engine
+U|se python to generate a human-readable completionlist
+Contr|ol fine-toothed params to adjust what completions you want
+The|n, write the hard-coded list to file, and load into Typesript/Javascript
+No|w, add a simple text controller
+Is it t|he best solution?  no. probably not
+It doe|sn't scale well for context-aware completions
+It i|s currently more for saving time typing long individual words
+h|ippopotamus
+BUT: it| can be used as a fallback in addition to your smart stuff
+AND| it is FREE, unlike most LLM APIs
+Is it c|ustomizable? Definitely
+S|ee more at https://github.com/modularizer/automobile-complete
 `;
 
 interface AutocompleteDemoProps {

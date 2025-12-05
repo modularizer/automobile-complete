@@ -62,9 +62,9 @@ export class AutocompleteTextController {
   initializeTrie(completionList: string) {
     console.log("[AutocompleteTextController] initializeTrie called");
     try {
-      const t = Trie.fromWords(completionList);
+    const t = Trie.fromWords(completionList);
       console.log("[AutocompleteTextController] Trie created, root children:", Object.keys(t.children));
-      this._currentNode = t;
+    this._currentNode = t;
       console.log("[AutocompleteTextController] Page load - Current node:", {
         prefix: this._currentNode.prefix,
         completion: this._currentNode.completion,
@@ -75,7 +75,7 @@ export class AutocompleteTextController {
         wordsCount: this._currentNode.words?.length || 0,
         node: this._currentNode,
       });
-      this.notifyListeners();
+    this.notifyListeners();
     } catch (error) {
       console.error("[AutocompleteTextController] Error initializing trie:", error);
       throw error;

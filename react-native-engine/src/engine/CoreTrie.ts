@@ -276,9 +276,8 @@ export class CoreTrie {
           continue;
         }
         const [pre, ...postParts] = line.split("|");
-        const post = postParts.join("|").trim(); // Trim trailing/leading spaces from completion
-        const preTrimmed = pre.trim(); // Also trim prefix to be safe
-        this.insert_pair(preTrimmed, post, freq);
+        const post = postParts.join("|").trimEnd(); // Trim trailing spaces from completion
+        this.insert_pair(pre, post, freq);
       }
     }
     return this;

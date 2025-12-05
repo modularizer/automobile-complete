@@ -15,16 +15,19 @@ export class DarkTheme extends Theme {
       borderRadius: 8,
       padding: 12,
       fontSize: 16,
+      lineHeight: 20, // Match line height for proper single-line start
       backgroundColor: "#1e1e1e",
-      minHeight: 44,
       color: "rgba(255,255,255,0.01)", // Almost transparent but allows cursor
+      // Height will be controlled dynamically for multiline expansion
     },
     visibleText: {
       fontSize: 16,
+      lineHeight: 20, // Match input lineHeight
       color: "#fff",
     },
     suggestionText: {
       fontSize: 16,
+      lineHeight: 20, // Match input lineHeight
       color: "#888",
     },
 

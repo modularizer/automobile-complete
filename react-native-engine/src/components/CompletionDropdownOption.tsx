@@ -64,6 +64,8 @@ export default function CompletionDropdownOption({
     completion.remainingPrefix.includes("\n") ||
     completion.completion.includes("\n");
 
+  console.log("completion", completion);
+
   return (
     <TouchableOpacity
       key={index}
@@ -88,16 +90,23 @@ export default function CompletionDropdownOption({
             </Text>
           ) : null}
           {completion.completion ? (
-            <Text style={mergedStyles.completionPostfix}>{completion.completion}</Text>
+            <Text style={mergedStyles.completionPostfix} numberOfLines={undefined}>
+              {completion.completion}
+            </Text>
           ) : null}
         </Text>
       ) : (
-        // Single-line rendering: use separate components for highlight container
-        <>
+        // Single-line rendering: wrap in Text to preserve whitespace (especially leading spaces in completion)
+        <Text>
           {completion.typedPrefix ? (
-            <View style={mergedStyles.highlightContainer}>
-              <Text style={mergedStyles.completionTyped}>{completion.typedPrefix}</Text>
-            </View>
+            <Text
+              style={[
+                mergedStyles.completionTyped,
+                { backgroundColor: themeStyles.highlightContainer.backgroundColor },
+              ]}
+            >
+              {completion.typedPrefix}
+            </Text>
           ) : null}
           {completion.remainingPrefix ? (
             <Text style={mergedStyles.completionRemainingPrefix}>
@@ -105,9 +114,11 @@ export default function CompletionDropdownOption({
             </Text>
           ) : null}
           {completion.completion ? (
-            <Text style={mergedStyles.completionPostfix}>{completion.completion}</Text>
+            <Text style={mergedStyles.completionPostfix}>
+              {completion.completion}
+            </Text>
           ) : null}
-        </>
+        </Text>
       )}
     </TouchableOpacity>
   );
