@@ -3,9 +3,23 @@ CARRIAGE_RETURN = "\r"
 CLEAR_REST_OF_LINE = f"\033[K"
 CLEAR_LINE = f"{CARRIAGE_RETURN}{CLEAR_REST_OF_LINE}"
 ERASE_LINE="\033[2K"
-SAVE_CURSOR = "\0337"    # or "\033[s"
-RESTORE_CURSOR = "\0338" # or "\033[u"
-    
+
+settings = {
+    "cursor_mode": "terminal"
+}
+
+SAVE_CURSOR_TERMINAL = "\0337"    # or "\033[s"
+RESTORE_CURSOR_TERMINAL = "\0338" # or "\033[u"
+SAVE_CURSOR_CONSOLE = "\033[s"
+RESTORE_CURSOR_CONSOLE = "\033[u"
+
+
+def save():
+    return SAVE_CURSOR_TERMINAL if settings["cursor_mode"] == "terminal" else SAVE_CURSOR_CONSOLE
+
+
+def restore():
+    return RESTORE_CURSOR_TERMINAL if settings["cursor_mode"] == "terminal" else RESTORE_CURSOR_CONSOLE
 
 def left(n=1):
     return f"\033[{n}D"
@@ -47,12 +61,7 @@ def replace(ch=" "):
     return ch + left()
 
 
-def save():
-    return SAVE_CURSOR
 
-
-def restore():
-    return RESTORE_CURSOR
 
 
 def write_ahead(text: str):
