@@ -107,8 +107,16 @@
   <div class="demo-section">
     <h2>Single-line Input</h2>
     <p>Type words like "hello", "world", "hi there" to see autocomplete suggestions.</p>
-    <input id="input1" type="text" placeholder="Start typing...">
-    <div class="instructions">
+
+      <input id="input1" type="text" placeholder="Start typing..."
+             onchange="console.log('change', event, this.value)"
+             oninput="console.log('input', event, this.value)"
+             onkeypress="console.log('keypress', event, this.value)"
+             onkeyup="console.log('keyup', event, this.value)"
+             onkeydown="console.log('keydown', event, this.value)"
+      />
+
+      <div class="instructions">
       <strong>Try it:</strong>
       Type <code>h</code> to see suggestions starting with "h". Press <code>Tab</code> to accept, or use arrow keys to navigate.
     </div>
@@ -136,26 +144,29 @@
 
   <script type="module">
     // Sample completion list
-    const completionList = `
-Te|sting
-if| this works
-
-    `;
+//     const completionList = `
+// Te|sting
+// if| this works
+//     `;
 
     // Import from the bundled file
-    const { AutocompleteTextController, attachAutocomplete } = await import('./dist/automobile-complete.js');
+    const {attachAutocomplete} = await import('./dist/automobile-complete.js');
 
+    attachAutocomplete('input, textarea', `
+Te|sting
+if| this works
+    `);
     // Create controllers for each input
-    const controller1 = new AutocompleteTextController(completionList);
-    const controller2 = new AutocompleteTextController(completionList, { maxLines: null }); // Multi-line
-    const controller3 = new AutocompleteTextController(completionList);
+    // const controller1 = new AutocompleteTextController(completionList);
+    // const controller2 = new AutocompleteTextController(completionList, { maxLines: null }); // Multi-line
+    // const controller3 = new AutocompleteTextController(completionList);
+    //
+    // // Attach autocomplete to inputs
+    // attachAutocomplete(document.getElementById('input1'), completionList);
+    // attachAutocomplete(document.getElementById('textarea1'), controller2);
+    // attachAutocomplete(document.getElementById('input2'), controller3);
 
-    // Attach autocomplete to inputs
-    attachAutocomplete(document.getElementById('input1'), controller1);
-    attachAutocomplete(document.getElementById('textarea1'), controller2);
-    attachAutocomplete(document.getElementById('input2'), controller3);
-
-    console.log('✅ Autocomplete attached successfully!');
+    // console.log('✅ Autocomplete attached successfully!');
 
   </script>
 </body>
