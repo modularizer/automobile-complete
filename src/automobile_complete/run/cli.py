@@ -21,9 +21,9 @@ from typing import Literal, Any
 
 from automobile_complete.engine import Trie
 from automobile_complete.utils.env import env
-from automobile_complete.utils.terminal import BACKSPACE, TAB, CARRIAGE_RETURN, \
-    CLEAR_LINE, ESC, print_with_suggestion, BACKSPACE2, CTRL
-from automobile_complete.utils.terminal import RESET, GRAY
+from automobile_complete.utils.terminal.chars import ESC, CARRIAGE_RETURN, CTRL, TAB
+from automobile_complete.utils.terminal.terminal import print_with_suggestion
+from automobile_complete.utils.terminal.terminal_colors import GRAY, RESET
 
 
 def get_char():
@@ -108,7 +108,7 @@ def interactive_demo(trie: Trie,
     # Initialize state - start at root
     current_node = trie
     has_typed = False
-    print(f"{GRAY}{placeholder}{RESET}" if placeholder else "", end=CARRIAGE_RETURN, file=display_stream)
+    print_with_suggestion("", placeholder, end=CARRIAGE_RETURN, file=display_stream, print=print)
 
     recording = ""
     try:

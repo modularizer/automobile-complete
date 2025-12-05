@@ -2,8 +2,6 @@ from typing import Any
 
 from automobile_complete.utils.typehints import Word, Prefix, Completion, Freq, Prob, Index, Sort, Words
 
-from automobile_complete.utils.terminal import GREEN_HIGHLIGHT, RESET
-
 
 class Node:
     """

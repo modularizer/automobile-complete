@@ -1,3 +1,6 @@
+import automobile_complete.utils.terminal.raw_colors as r
+raw_colors = r
+
 BaseColor = int | str | tuple[int, int, int] | tuple[int, int, int, float] | tuple[int, int, int, int]
 
 def to_rgba(color: BaseColor) -> tuple[int, int, int, float] | None:
@@ -11,6 +14,7 @@ def to_rgba(color: BaseColor) -> tuple[int, int, int, float] | None:
     Returns:
       (r, g, b, a) tuple
     """
+
     if color is None:
         return None
     if color == "":
@@ -25,8 +29,8 @@ def to_rgba(color: BaseColor) -> tuple[int, int, int, float] | None:
         color = TerminalCode.normname(color)
         r = repr(color)
         if r.startswith("'\\"):
-            if r.startswith("'\\033[38;") or r.startswith("'\\033[48;"):
-                rs, gs, bs = r[:-1].split(",")[1:]
+            if r.startswith(raw_colors.FG_RGB_HEADER) or r.startswith(raw_colors.BG_RGB_HEADER):
+                rs, gs, bs = r[:-1].split(",")[2:]
                 return int(rs), int(gs), int(bs)
             tc = TerminalCode.retrieve(color)
             if tc and tc.rgb:
@@ -155,7 +159,7 @@ class TerminalCode(str):
 TC = TerminalCode
 
 
-RESET = TC("\033[0m", "reset", "fg", "bg", "styles")
+RESET = TC(r.RESET, "reset", "fg", "bg", "styles")
 
 
 
@@ -167,33 +171,32 @@ w=229
 f=255
 h =127
 t = 92
-BLACK   = TC("\033[30m", "black", "fg", rgb=(b,b,b))
-RED     = TC("\033[31m", "red", "fg", rgb=(v, b, b))
-GREEN   = TC("\033[32m", "green", "fg", rgb=(b, v, b))
-YELLOW  = TC("\033[33m", "yellow", "fg", rgb=(v, v, b))
-BLUE    = TC("\033[34m", "blue", "fg", rgb=(b, b, blu))
-MAGENTA = TC("\033[35m", "magenta", "fg", rgb=(v, b, v))
-CYAN    = TC("\033[36m", "cyan", "fg", rgb=(b, v, v))
-WHITE   = TC("\033[37m", "white", "fg", rgb=(w,w,w))
-LIGHT_GRAY  = TC("\033[37m", "lightgray", "fg", rgb=(w,w,w))
-LIGHT_GREY  = TC("\033[37m", "lightgrey", "fg", rgb=(w,w,w))
-BRIGHT_BLACK   = TC("\033[90m", "brightblack", "fg", rgb=(h, h, h))
-DARK_GRAY   = TC("\033[90m", "darkgray", "fg", rgb=(h, h, h))
-DARK_GREY  = TC("\033[90m", "darkgrey", "fg", rgb=(h, h, h))
-BRIGHT_RED     = TC("\033[91m", "brightred", "fg", rgb = (f, b, b))
-BRIGHT_GREEN   = TC("\033[92m", "brightgreen", "fg", rgb = (b, f, b))
-BRIGHT_YELLOW  = TC("\033[93m", "brightyellow", "fg", rgb = (f, f, b))
-BRIGHT_BLUE    = TC("\033[94m", "brightblue", "fg", rgb=(t, t, f))
-BRIGHT_MAGENTA = TC("\033[95m", "brightmagenta", "fg", rgb=(f, b, f))
-BRIGHT_CYAN    = TC("\033[96m", "brightcyan", "fg", rgb=(b, f, f))
-BRIGHT_WHITE   = TC("\033[97m", "brightwhite", "fg", rgb=(f,f, f))
+BLACK = TC(r.BLACK, "black", "fg", rgb=(b,b,b))
+RED   = TC(r.RED  , "red", "fg", rgb=(v, b, b))
+GREEN = TC(r.GREEN, "green", "fg", rgb=(b, v, b))
+YELLOW  = TC(r.YELLOW, "yellow", "fg", rgb=(v, v, b))
+BLUE  = TC(r.BLUE , "blue", "fg", rgb=(b, b, blu))
+MAGENTA = TC(r.MAGENTA, "magenta", "fg", rgb=(v, b, v))
+CYAN  = TC(r.CYAN , "cyan", "fg", rgb=(b, v, v))
+WHITE = TC(r.WHITE, "white", "fg", rgb=(w,w,w))
+LIGHT_GRAY  = TC(r.LIGHT_GRAY, "lightgray", "fg", rgb=(w,w,w))
+LIGHT_GREY  = TC(r.LIGHT_GREY, "lightgrey", "fg", rgb=(w,w,w))
+BRIGHT_BLACK = TC(r.BRIGHT_BLACK, "brightblack", "fg", rgb=(h, h, h))
+GRAY = TC(r.GRAY, "gray", "fg", rgb=(h, h, h))
+GREY  = TC(r.GREY, "grey", "fg", rgb=(h, h, h))
+BRIGHT_RED   = TC(r.BRIGHT_RED  , "brightred", "fg", rgb = (f, b, b))
+BRIGHT_GREEN = TC(r.BRIGHT_GREEN, "brightgreen", "fg", rgb = (b, f, b))
+BRIGHT_YELLOW  = TC(r.BRIGHT_YELLOW, "brightyellow", "fg", rgb = (f, f, b))
+BRIGHT_BLUE  = TC(r.BRIGHT_BLUE , "brightblue", "fg", rgb=(t, t, f))
+BRIGHT_MAGENTA = TC(r.BRIGHT_MAGENTA, "brightmagenta", "fg", rgb=(f, b, f))
+BRIGHT_CYAN  = TC(r.BRIGHT_CYAN , "brightcyan", "fg", rgb=(b, f, f))
+BRIGHT_WHITE = TC(r.BRIGHT_WHITE, "brightwhite", "fg", rgb=(f,f, f))
 
 
 class FGRGBTerminalCode(TerminalCode):
     def __new__(cls, rgb: BaseColor, name: str = "unknown", *groups: str):
         rgb: BaseColor = to_rgba(rgb)[:3]
-        r, g, b = rgb
-        c = f"\033[38;2;{r};{g};{b}m"
+        c = r.build_fg_rgb(*rgb)
         # print("foreground", rgb, name, repr(c)[1:-1])
         groups = groups or ("unknown",)
         groups = [cls.normname(n) for n in groups]
@@ -207,55 +210,54 @@ class FGRGBTerminalCode(TerminalCode):
                                rgb=rgb)
 
 
-DARKRED = FGRGBTerminalCode("#8B0000", "darkred")
-DARKGREEN = FGRGBTerminalCode("#006400", "darkgreen")
-DARKBLUE = FGRGBTerminalCode("#00008B", "darkblue")
-DARKCYAN = FGRGBTerminalCode("#008B8B", "darkcyan")
-DARKMAGENTA = FGRGBTerminalCode("#8B008B", "darkmagenta")
-DARKYELLOW = FGRGBTerminalCode("#8B8B00", "darkyellow")
-LIGHTRED = FGRGBTerminalCode("#FFA07A", "lightred")
-LIGHTGREEN = FGRGBTerminalCode("#90EE90", "lightgreen")
-LIGHTBLUE = FGRGBTerminalCode("#ADD8E6", "lightblue")
-LIGHTCYAN = FGRGBTerminalCode("#E0FFFF", "lightcyan")
-LIGHTMAGENTA = FGRGBTerminalCode("#FF77FF", "lightmagenta")
-LIGHTYELLOW = FGRGBTerminalCode("#FFFFE0", "lightyellow")
-ORANGE = FGRGBTerminalCode("#FFA500", "orange")
-PINK = FGRGBTerminalCode("#FFC0CB", "pink")
-PURPLE = FGRGBTerminalCode("#800080", "purple")
-BROWN = FGRGBTerminalCode("#A52A2A", "brown")
-GOLD = FGRGBTerminalCode("#FFD700", "gold")
-LIME = FGRGBTerminalCode("#32CD32", "lime")
-TEAL = FGRGBTerminalCode("#008080", "teal")
-NAVY = FGRGBTerminalCode("#000080", "navy")
-OLIVE = FGRGBTerminalCode("#808000", "olive")
-MAROON = FGRGBTerminalCode("#800000", "maroon")
+DARKRED = FGRGBTerminalCode(r.DARKRED_HEX, "darkred")
+DARKGREEN = FGRGBTerminalCode(r.DARKGREEN_HEX, "darkgreen")
+DARKBLUE = FGRGBTerminalCode(r.DARKBLUE_HEX, "darkblue")
+DARKCYAN = FGRGBTerminalCode(r.DARKCYAN_HEX, "darkcyan")
+DARKMAGENTA = FGRGBTerminalCode(r.DARKMAGENTA_HEX, "darkmagenta")
+DARKYELLOW = FGRGBTerminalCode(r.DARKYELLOW_HEX, "darkyellow")
+LIGHTRED = FGRGBTerminalCode(r.LIGHTRED_HEX, "lightred")
+LIGHTGREEN = FGRGBTerminalCode(r.LIGHTGREEN_HEX, "lightgreen")
+LIGHTBLUE = FGRGBTerminalCode(r.LIGHTBLUE_HEX, "lightblue")
+LIGHTCYAN = FGRGBTerminalCode(r.LIGHTCYAN_HEX, "lightcyan")
+LIGHTMAGENTA = FGRGBTerminalCode(r.LIGHTMAGENTA_HEX, "lightmagenta")
+LIGHTYELLOW = FGRGBTerminalCode(r.LIGHTYELLOW_HEX, "lightyellow")
+ORANGE = FGRGBTerminalCode(r.ORANGE_HEX, "orange")
+PINK = FGRGBTerminalCode(r.PINK_HEX, "pink")
+PURPLE = FGRGBTerminalCode(r.PURPLE_HEX, "purple")
+BROWN = FGRGBTerminalCode(r.BROWN_HEX, "brown")
+GOLD = FGRGBTerminalCode(r.GOLD_HEX, "gold")
+LIME = FGRGBTerminalCode(r.LIME_HEX, "lime")
+TEAL = FGRGBTerminalCode(r.TEAL_HEX, "teal")
+NAVY = FGRGBTerminalCode(r.NAVY_HEX, "navy")
+OLIVE = FGRGBTerminalCode(r.OLIVE_HEX, "olive")
+MAROON = FGRGBTerminalCode(r.MAROON_HEX, "maroon")
 
 
 
 # === Standard Background Colors ===
-BG_BLACK   = TC("\033[40m", "black", "bg", rgb=(b,b,b))
-BG_RED     = TC("\033[41m", "red", "bg", rgb=(v, b, b))
-BG_GREEN   = TC("\033[42m", "green", "bg", rgb=(b, v, b))
-BG_YELLOW  = TC("\033[43m", "yellow", "bg", rgb=(v, v, b))
-BG_BLUE    = TC("\033[44m", "blue", "bg", rgb=(b, b, blu))
-BG_MAGENTA = TC("\033[45m", "magenta", "bg", rgb=(v, b, v))
-BG_CYAN    = TC("\033[46m", "cyan", "bg", rgb=(b, v, v))
-BG_WHITE   = TC("\033[47m", "white", "bg", rgb=(w,w,w))
-BG_BRIGHT_BLACK   = TC("\033[100m", "brightblack", "bg", rgb=(h, h, h))
-BG_BRIGHT_RED     = TC("\033[101m", "brightred", "bg", rgb=(f, b, b))
-BG_BRIGHT_GREEN   = TC("\033[102m", "brightgreen", "bg", rgb=(b, f, b))
-BG_BRIGHT_YELLOW  = TC("\033[103m", "brightyellow", "bg", rgb=(f, f, b))
-BG_BRIGHT_BLUE    = TC("\033[104m", "brightblue", "bg", rgb=(t, t, f))
-BG_BRIGHT_MAGENTA = TC("\033[105m", "brightmagenta", "bg", rgb=(f, b, f))
-BG_BRIGHT_CYAN    = TC("\033[106m", "brightcyan", "bg", rgb=(b, f, f))
-BG_BRIGHT_WHITE   = TC("\033[107m", "brightwhite", "bg", rgb=(f, f, f))
+BG_BLACK = TC(r.BLACK, "black", "bg", rgb=(b,b,b))
+BG_RED   = TC(r.RED  , "red", "bg", rgb=(v, b, b))
+BG_GREEN = TC(r.GREEN, "green", "bg", rgb=(b, v, b))
+BG_YELLOW  = TC(r.BG_YELLOW, "yellow", "bg", rgb=(v, v, b))
+BG_BLUE  = TC(r.BLUE , "blue", "bg", rgb=(b, b, blu))
+BG_MAGENTA = TC(r.BG_MAGENTA, "magenta", "bg", rgb=(v, b, v))
+BG_CYAN  = TC(r.CYAN , "cyan", "bg", rgb=(b, v, v))
+BG_WHITE = TC(r.WHITE, "white", "bg", rgb=(w,w,w))
+BG_BRIGHT_BLACK = TC(r.BRIGHT_BLACK, "brightblack", "bg", rgb=(h, h, h))
+BG_BRIGHT_RED   = TC(r.BRIGHT_RED  , "brightred", "bg", rgb=(f, b, b))
+BG_BRIGHT_GREEN = TC(r.BRIGHT_GREEN, "brightgreen", "bg", rgb=(b, f, b))
+BG_BRIGHT_YELLOW  = TC(r.BG_BRIGHT_YELLOW, "brightyellow", "bg", rgb=(f, f, b))
+BG_BRIGHT_BLUE  = TC(r.BRIGHT_BLUE , "brightblue", "bg", rgb=(t, t, f))
+BG_BRIGHT_MAGENTA = TC(r.BG_BRIGHT_MAGENTA, "brightmagenta", "bg", rgb=(f, b, f))
+BG_BRIGHT_CYAN  = TC(r.BRIGHT_CYAN , "brightcyan", "bg", rgb=(b, f, f))
+BG_BRIGHT_WHITE = TC(r.BRIGHT_WHITE, "brightwhite", "bg", rgb=(f, f, f))
 
 
 class BGRGBTerminalCode(TerminalCode):
     def __new__(cls, rgb: BaseColor, name: str = "unknown", *groups: str):
         rgb: BaseColor = to_rgba(rgb)[:3]
-        r, g, b = rgb
-        c = f"\033[38;2;{r};{g};{b}m"
+        c = r.build_bg_rgb(*rgb)
         groups = groups or ("unknown",)
         groups = [cls.normname(n) for n in groups]
         for g in ("rgb", "bg"):
@@ -266,38 +268,38 @@ class BGRGBTerminalCode(TerminalCode):
                                name,
                                *groups,
                                rgb=rgb)
-BG_DARKRED = BGRGBTerminalCode("#8B0000", "darkred")
-BG_DARKGREEN = BGRGBTerminalCode("#006400", "darkgreen")
-BG_DARKBLUE = BGRGBTerminalCode("#00008B", "darkblue")
-BG_DARKCYAN = BGRGBTerminalCode("#008B8B", "darkcyan")
-BG_DARKMAGENTA = BGRGBTerminalCode("#8B008B", "darkmagenta")
-BG_DARKYELLOW = BGRGBTerminalCode("#8B8B00", "darkyellow")
-BG_LIGHTRED = BGRGBTerminalCode("#FFA07A", "lightred")
-BG_LIGHTGREEN = BGRGBTerminalCode("#90EE90", "lightgreen")
-BG_LIGHTBLUE = BGRGBTerminalCode("#ADD8E6", "lightblue")
-BG_LIGHTCYAN = BGRGBTerminalCode("#E0FFFF", "lightcyan")
-BG_LIGHTMAGENTA = BGRGBTerminalCode("#FF77FF", "lightmagenta")
-BG_LIGHTYELLOW = BGRGBTerminalCode("#FFFFE0", "lightyellow")
-BG_ORANGE = BGRGBTerminalCode("#FFA500", "orange")
-BG_PINK = BGRGBTerminalCode("#FFC0CB", "pink")
-BG_PURPLE = BGRGBTerminalCode("#800080", "purple")
-BG_BROWN = BGRGBTerminalCode("#A52A2A", "brown")
-BG_GOLD = BGRGBTerminalCode("#FFD700", "gold")
-BG_LIME = BGRGBTerminalCode("#32CD32", "lime")
-BG_TEAL = BGRGBTerminalCode("#008080", "teal")
-BG_NAVY = BGRGBTerminalCode("#000080", "navy")
-BG_OLIVE = BGRGBTerminalCode("#808000", "olive")
-BG_MAROON = BGRGBTerminalCode("#800000", "maroon")
+BG_DARKRED = BGRGBTerminalCode(r.DARKRED_HEX, "darkred")
+BG_DARKGREEN = BGRGBTerminalCode(r.DARKGREEN_HEX, "darkgreen")
+BG_DARKBLUE = BGRGBTerminalCode(r.DARKBLUE_HEX, "darkblue")
+BG_DARKCYAN = BGRGBTerminalCode(r.DARKCYAN_HEX, "darkcyan")
+BG_DARKMAGENTA = BGRGBTerminalCode(r.DARKMAGENTA_HEX, "darkmagenta")
+BG_DARKYELLOW = BGRGBTerminalCode(r.DARKYELLOW_HEX, "darkyellow")
+BG_LIGHTRED = BGRGBTerminalCode(r.LIGHTRED_HEX, "lightred")
+BG_LIGHTGREEN = BGRGBTerminalCode(r.LIGHTGREEN_HEX, "lightgreen")
+BG_LIGHTBLUE = BGRGBTerminalCode(r.LIGHTBLUE_HEX, "lightblue")
+BG_LIGHTCYAN = BGRGBTerminalCode(r.LIGHTCYAN_HEX, "lightcyan")
+BG_LIGHTMAGENTA = BGRGBTerminalCode(r.LIGHTMAGENTA_HEX, "lightmagenta")
+BG_LIGHTYELLOW = BGRGBTerminalCode(r.LIGHTYELLOW_HEX, "lightyellow")
+BG_ORANGE = BGRGBTerminalCode(r.ORANGE_HEX, "orange")
+BG_PINK = BGRGBTerminalCode(r.PINK_HEX, "pink")
+BG_PURPLE = BGRGBTerminalCode(r.PURPLE_HEX, "purple")
+BG_BROWN = BGRGBTerminalCode(r.BROWN_HEX, "brown")
+BG_GOLD = BGRGBTerminalCode(r.GOLD_HEX, "gold")
+BG_LIME = BGRGBTerminalCode(r.LIME_HEX, "lime")
+BG_TEAL = BGRGBTerminalCode(r.TEAL_HEX, "teal")
+BG_NAVY = BGRGBTerminalCode(r.NAVY_HEX, "navy")
+BG_OLIVE = BGRGBTerminalCode(r.OLIVE_HEX, "olive")
+BG_MAROON = BGRGBTerminalCode(r.MAROON_HEX, "maroon")
 
 # === Text Attributes ===
-BOLD         = TC("\033[1m", "bold", "styles")
-DIM          = TC("\033[2m", "dim", "styles")
-ITALIC       = TC("\033[3m", "italic", "styles")
-UNDERLINE    = TC("\033[4m", "underline", "styles")
-BLINK        = TC("\033[5m", "blink", "styles")     # rarely supported, and often disabled
-REVERSE      = TC("\033[7m", "reverse", "styles")     # swap fg/bg
-HIDDEN       = TC("\033[8m", "hidden", "styles")     # used for passwords
-STRIKETHROUGH = TC("\033[9m", "strikethrough", "styles")
+BOLD       = TC(r.BOLD      , "bold", "styles")
+DIM        = TC(r.DIM       , "dim", "styles")
+ITALIC     = TC(r.ITALIC    , "italic", "styles")
+UNDERLINE  = TC(r.UNDERLINE , "underline", "styles")
+BLINK      = TC(r.BLINK     , "blink", "styles")     # rarely supported, and often disabled
+REVERSE    = TC(r.REVERSE   , "reverse", "styles")     # swap fg/bg
+HIDDEN     = TC(r.HIDDEN    , "hidden", "styles")     # used for passwords
+STRIKETHROUGH = TC(r.STRIKETHROUGH, "strikethrough", "styles")
 
 
 # _____________________________________________________________________________________________________________________

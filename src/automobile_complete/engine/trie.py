@@ -13,8 +13,8 @@ The trie structure enables efficient prefix-based word lookup and completion,
 with support for displaying completion suggestions in a user-friendly format.
 """
 from automobile_complete.engine.core_trie import CoreTrie
-from automobile_complete.utils.terminal import CARRIAGE_RETURN, BACKSPACE, TAB
-
+from automobile_complete.utils.terminal.chars import BACKSPACE, CARRIAGE_RETURN, TAB
+from automobile_complete.utils.terminal.terminal_colors import RESET, GREY, WHITE
 
 
 class Trie(CoreTrie):
@@ -77,8 +77,8 @@ class Trie(CoreTrie):
         """
         full_text: str = full_text if full_text is not None else self.full_text
         u: bool = use_terminal_colors if use_terminal_colors is not None else self.use_terminal_colors
-        start2: str = GRAY2 if u else ""  # Color for completion text (white)
-        start: str = DARK_GREY if u else ""  # Color for before-state text (dark gray)
+        start2: str = WHITE if u else ""  # Color for completion text (white)
+        start: str = GREY if u else ""  # Color for before-state text (dark gray)
         c: str = self.completion.replace(" ", "█")  # Replace spaces with block character
         end: str = RESET if u else ""  # Reset color code
 

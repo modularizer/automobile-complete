@@ -16,7 +16,7 @@ with support for displaying completion suggestions in a user-friendly format.
 import re
 from pathlib import Path
 
-from automobile_complete.utils.terminal import BACKSPACE, TAB, BACKSPACE2
+from automobile_complete.utils.terminal.chars import BACKSPACE2, BACKSPACE, TAB
 
 FINALE_PART = re.compile(r"[A-Za-z0-9']+$")
 

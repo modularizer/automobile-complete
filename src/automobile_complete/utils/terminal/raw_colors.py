@@ -1,0 +1,87 @@
+
+RESET = "\033[0m"
+
+
+# === Standard Foreground Colors ===
+BLACK   = "\033[30m"
+RED     = "\033[31m"
+GREEN   = "\033[32m"
+YELLOW  = "\033[33m"
+BLUE    = "\033[34m"
+MAGENTA = "\033[35m"
+CYAN    = "\033[36m"
+WHITE   = "\033[37m"
+LIGHT_GRAY  = "\033[37m"
+LIGHT_GREY  = "\033[37m"
+BRIGHT_BLACK   = "\033[90m"
+GRAY   = "\033[90m"
+GREY  = "\033[90m"
+BRIGHT_RED     = "\033[91m"
+BRIGHT_GREEN   = "\033[92m"
+BRIGHT_YELLOW  = "\033[93m"
+BRIGHT_BLUE    = "\033[94m"
+BRIGHT_MAGENTA = "\033[95m"
+BRIGHT_CYAN    = "\033[96m"
+BRIGHT_WHITE   = "\033[97m"
+
+DARKRED_HEX = "#8B0000"
+DARKGREEN_HEX = "#006400"
+DARKBLUE_HEX = "#00008B"
+DARKCYAN_HEX = "#008B8B"
+DARKMAGENTA_HEX = "#8B008B"
+DARKYELLOW_HEX = "#8B8B00"
+LIGHTRED_HEX = "#FFA07A"
+LIGHTGREEN_HEX = "#90EE90"
+LIGHTBLUE_HEX = "#ADD8E6"
+LIGHTCYAN_HEX = "#E0FFFF"
+LIGHTMAGENTA_HEX = "#FF77FF"
+LIGHTYELLOW_HEX = "#FFFFE0"
+ORANGE_HEX = "#FFA500"
+PINK_HEX = "#FFC0CB"
+PURPLE_HEX = "#800080"
+BROWN_HEX = "#A52A2A"
+GOLD_HEX = "#FFD700"
+LIME_HEX = "#32CD32"
+TEAL_HEX = "#008080"
+NAVY_HEX = "#000080"
+OLIVE_HEX = "#808000"
+MAROON_HEX = "#800000"
+
+
+
+# === Standard Background Colors ===
+BG_BLACK   = "\033[40m"
+BG_RED     = "\033[41m"
+BG_GREEN   = "\033[42m"
+BG_YELLOW  = "\033[43m"
+BG_BLUE    = "\033[44m"
+BG_MAGENTA = "\033[45m"
+BG_CYAN    = "\033[46m"
+BG_WHITE   = "\033[47m"
+BG_BRIGHT_BLACK   = "\033[100m"
+BG_BRIGHT_RED     = "\033[101m"
+BG_BRIGHT_GREEN   = "\033[102m"
+BG_BRIGHT_YELLOW  = "\033[103m"
+BG_BRIGHT_BLUE    = "\033[104m"
+BG_BRIGHT_MAGENTA = "\033[105m"
+BG_BRIGHT_CYAN    = "\033[106m"
+BG_BRIGHT_WHITE   = "\033[107m"
+
+
+# === Text Attributes ===
+BOLD         = "\033[1m"
+DIM          = "\033[2m"
+ITALIC       = "\033[3m"
+UNDERLINE    = "\033[4m"
+BLINK        = "\033[5m"
+REVERSE      = "\033[7m"
+HIDDEN       = "\033[8m"
+STRIKETHROUGH = "\033[9m"
+
+FG_RGB_HEADER = "\033[38;2;"
+BG_RGB_HEADER = "\033[38;2;"
+def build_fg_rgb(r: int, g: int, b: int):
+    return f"{FG_RGB_HEADER}{r};{g};{b}m"
+
+def build_bg_rgb(r: int, g: int, b: int):
+    return f"{BG_RGB_HEADER}{r};{g};{b}m"
