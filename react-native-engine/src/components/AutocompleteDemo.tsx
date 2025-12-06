@@ -40,9 +40,9 @@ export default function AutocompleteDemo({
   darkMode,
   showThemeSelector = true,
 }: AutocompleteDemoProps) {
-  console.log("[AutocompleteDemo] Component rendering, completionList length:", completionList.length);
+  // console.log("[AutocompleteDemo] Component rendering, completionList length:", completionList.length);
   const [controller] = useState(() => {
-    console.log("[AutocompleteDemo] Creating controller with completionList");
+    // console.log("[AutocompleteDemo] Creating controller with completionList");
     return new AutocompleteTextController(completionList, {
       maxCompletions,
       tabBehavior: "select-best", // Default

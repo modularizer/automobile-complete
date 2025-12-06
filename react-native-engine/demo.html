@@ -85,16 +85,7 @@
       font-family: 'Courier New', monospace;
       font-size: 0.9em;
     }
-    
-    .note {
-      background: #fff3cd;
-      padding: 15px;
-      border-radius: 4px;
-      margin-top: 15px;
-      font-size: 0.9em;
-      color: #856404;
-      border-left: 4px solid #ffc107;
-    }
+
   </style>
 </head>
 <body>
@@ -105,9 +96,7 @@
   </div>
 
   <div class="demo-section">
-    <h2>Single-line Input</h2>
-    <p>Type words like "hello", "world", "hi there" to see autocomplete suggestions.</p>
-
+    <h2>Input</h2>
       <input id="input1" type="text" placeholder="Start typing..."
              onchange="console.log('change', event, this.value)"
              oninput="console.log('input', event, this.value)"
@@ -115,59 +104,19 @@
              onkeyup="console.log('keyup', event, this.value)"
              onkeydown="console.log('keydown', event, this.value)"
       />
-
-      <div class="instructions">
-      <strong>Try it:</strong>
-      Type <code>h</code> to see suggestions starting with "h". Press <code>Tab</code> to accept, or use arrow keys to navigate.
-    </div>
   </div>
 
   <div class="demo-section">
-    <h2>Textarea (Multi-line)</h2>
-    <p>Autocomplete works with textareas too! Try typing multiple lines.</p>
+    <h2>Textarea</h2>
     <textarea id="textarea1" placeholder="Start typing..."></textarea>
-    <div class="instructions">
-      <strong>Try it:</strong>
-      Type <code>w</code> to see "world" or "welcome". Press <code>Enter</code> to create new lines (multi-line mode).
-    </div>
   </div>
 
-  <div class="demo-section">
-    <h2>Another Input (Different Styling)</h2>
-    <p>Each input works independently. This one has the same autocomplete but you can style it however you want.</p>
-    <input id="input2" type="text" placeholder="Another input..." style="border-color: #4CAF50;">
-    <div class="instructions">
-      <strong>Note:</strong>
-      The autocomplete overlay automatically matches your input's styling (font, padding, border, etc.).
-    </div>
-  </div>
-
-  <script type="module">
-    // Sample completion list
-//     const completionList = `
-// Te|sting
-// if| this works
-//     `;
-
-    // Import from the bundled file
-    const {attachAutocomplete} = await import('./dist/automobile-complete.js');
-
-    attachAutocomplete('input, textarea', `
-Te|sting
-if| this works
-    `);
-    // Create controllers for each input
-    // const controller1 = new AutocompleteTextController(completionList);
-    // const controller2 = new AutocompleteTextController(completionList, { maxLines: null }); // Multi-line
-    // const controller3 = new AutocompleteTextController(completionList);
-    //
-    // // Attach autocomplete to inputs
-    // attachAutocomplete(document.getElementById('input1'), completionList);
-    // attachAutocomplete(document.getElementById('textarea1'), controller2);
-    // attachAutocomplete(document.getElementById('input2'), controller3);
-
-    // console.log('✅ Autocomplete attached successfully!');
-
+  <script src="./dist/automobile-complete.js"
+    data-completions="Te|sting;if| this works"
+  >
+      gir|affes
+      pine|apples
   </script>
+
 </body>
 </html>

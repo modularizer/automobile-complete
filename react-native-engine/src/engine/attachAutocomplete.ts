@@ -71,10 +71,44 @@ export interface AttachAutocompleteOptions {
  * @returns Cleanup function to detach autocomplete
  */
 export function attachAutocomplete(
-  inputElement: HTMLInputElement | HTMLTextAreaElement | string,
-  controller: AutocompleteTextController | string,
-  options: AttachAutocompleteOptions & AutocompleteTextControllerOptions
+  inputElement?: HTMLInputElement | HTMLTextAreaElement | string,
+  controller?: AutocompleteTextController | string,
+  options?: AttachAutocompleteOptions & AutocompleteTextControllerOptions
 ): () => void {
+  
+  // Default to "input, textarea" if no element/selector provided
+  if (inputElement === undefined) {
+    inputElement = 'input, textarea';
+  }
+  
+  // If controller is a URL, fetch it
+  if (typeof controller === 'string' && (controller.startsWith('http://') || controller.startsWith('https://'))) {
+    // Return a promise-based cleanup that will attach after fetch
+    const cleanupFunctions: (() => void)[] = [];
+    let isCancelled = false;
+    
+    fetch(controller)
+      .then(response => response.text())
+      .then(completionList => {
+        if (!isCancelled) {
+          const cleanup = attachAutocomplete(inputElement!, completionList, options);
+          cleanupFunctions.push(cleanup);
+        }
+      })
+      .catch(error => {
+        console.error('Failed to fetch completion list:', error);
+      });
+    
+    return () => {
+      isCancelled = true;
+      cleanupFunctions.forEach(cleanup => cleanup());
+    };
+  }
+  
+  // If controller is not provided, try to get it from options or throw error
+  if (controller === undefined) {
+    throw new Error('Controller (completion list) is required');
+  }
 
   // If inputElement is a string, treat it as a query selector
   if (typeof inputElement === 'string') {
@@ -128,6 +162,12 @@ export function attachAutocomplete(
     controller = new AutocompleteTextController(controller, o);
   }
   
+  // Expose controller to window.amc if window exists
+  if (typeof window !== 'undefined') {
+    (window as any).amc = controller;
+    controller.help()
+  }
+  
   const {
     wrapperClass = 'autocomplete-wrapper',
     overlayClass = 'autocomplete-overlay',
@@ -135,7 +175,7 @@ export function attachAutocomplete(
     customStyles,
     usePasteEvents = false,
     simulateTyping = false,
-  } = options;
+  } = options || {};
   
   // Validate mode options
   if (usePasteEvents && simulateTyping) {
@@ -759,5 +799,3 @@ function getDefaultStyles(customStyles?: string): string {
     ${customStyles || ''}
   `;
 }
-
-export default attachAutocomplete;
