@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, TextInput, Appearance } from "react-native";
+import { View, Text, TextInput, Appearance, Image } from "react-native";
 import AutocompleteField from "./AutocompleteField";
 import { AutocompleteTextController } from "../engine/AutocompleteTextController";
 import { LightTheme, DarkTheme, Theme } from "../theme";
@@ -137,6 +137,11 @@ export default function AutocompleteDemo({
     <View style={activeTheme.styles.demoContainer}>
       <View style={activeTheme.styles.demoHeader}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Image 
+            source={require("../assets/logo.png")} 
+            style={{ width: 32, height: 32, marginRight: 8 }}
+            resizeMode="contain"
+          />
           <GithubLink
             url="https://github.com/modularizer/automobile-complete"
             theme={activeTheme}

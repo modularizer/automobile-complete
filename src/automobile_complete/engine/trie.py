@@ -14,7 +14,7 @@ with support for displaying completion suggestions in a user-friendly format.
 """
 from automobile_complete.engine.core_trie import CoreTrie
 from automobile_complete.utils.terminal.chars import BACKSPACE, CARRIAGE_RETURN, TAB
-from automobile_complete.utils.terminal.colors import RESET, GREY, WHITE
+from automobile_complete.utils.terminal.colors import RESET, GREY, WHITE, STRIKETHROUGH
 
 
 class Trie(CoreTrie):
@@ -79,7 +79,18 @@ class Trie(CoreTrie):
         u: bool = use_terminal_colors if use_terminal_colors is not None else self.use_terminal_colors
         start2: str = WHITE if u else ""  # Color for completion text (white)
         start: str = GREY if u else ""  # Color for before-state text (dark gray)
-        c: str = self.completion.replace(" ", "█")  # Replace spaces with block character
+        
+        # Check if completion starts with backspaces (full replacement)
+        completion = self.completion
+        backspace_count = 0
+        if completion.startswith(BACKSPACE):
+            # Count leading backspaces
+            while backspace_count < len(completion) and completion[backspace_count] == BACKSPACE:
+                backspace_count += 1
+            # Remove backspaces from completion for display
+            completion = completion[backspace_count:]
+        
+        c: str = completion.replace(" ", "█")  # Replace spaces with block character
         end: str = RESET if u else ""  # Reset color code
 
         # Clean full text: remove tabs and backspace sequences
@@ -93,7 +104,14 @@ class Trie(CoreTrie):
 
         # Current prefix (may be highlighted if partially accepted)
         p: str = full_text[-len(self.prefix):] if full_text and self.prefix else self.prefix
-        s: str = f"{b}{p}│{start2}{c}{end}"  # Format: before|prefix│completion
+        
+        # For full replacement, show prefix with strikethrough
+        if backspace_count > 0:
+            # Show prefix with strikethrough styling
+            strike: str = STRIKETHROUGH if u else ""  # Strikethrough for full replacement
+            s: str = f"{b}{strike}{p}{RESET if u else ''}│{start2}{c}{end}"  # Format: before|strikethrough-prefix│replacement
+        else:
+            s: str = f"{b}{p}│{start2}{c}{end}"  # Format: before|prefix│completion
         return s
 
 

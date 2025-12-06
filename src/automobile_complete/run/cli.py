@@ -21,7 +21,7 @@ from typing import Literal, Any
 
 from automobile_complete.engine import Trie
 from automobile_complete.utils.env import env
-from automobile_complete.utils.terminal.chars import ESC, CARRIAGE_RETURN, CTRL, TAB
+from automobile_complete.utils.terminal.chars import ESC, CARRIAGE_RETURN, CTRL, TAB, BACKSPACE
 from automobile_complete.utils.terminal.terminal import print_with_suggestion
 from automobile_complete.utils.terminal.colors import GRAY, RESET
 
@@ -116,10 +116,15 @@ def interactive_demo(trie: Trie,
             # Get current state from trie (it tracks full_text internally)
             full_text = current_node.full_text or ""
             completion = current_node.completion or ""
+            
+            # Get current prefix for highlighting replacements
+            current_prefix = current_node.prefix or ""
 
             # print
             if full_text:
-                print_with_suggestion(full_text, completion, file=display_stream, print = print)
+                # Pass the completion with backspaces (print_with_suggestion will handle display)
+                # and pass the prefix so it can highlight the right characters
+                print_with_suggestion(full_text, completion, prefix=current_prefix, file=display_stream, print = print)
             elif has_typed:
                 print_with_suggestion("", placeholder, file=display_stream, print = print)
 

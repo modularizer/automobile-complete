@@ -7,7 +7,10 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build": "node build.js"
+    "build": "node build.js",
+    "build:extension": "node ../chrome-extension/build-extension.js",
+    "build:extension:bake": "node ../chrome-extension/build-extension.js",
+    "build:extension:no-bake": "node ../chrome-extension/build-extension.js --no-bake"
   },
   "dependencies": {
     "expo": "~54.0.27",

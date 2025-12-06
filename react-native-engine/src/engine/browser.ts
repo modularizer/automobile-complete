@@ -5,8 +5,8 @@
 
 import { AutocompleteTextController } from "./AutocompleteTextController";
 import type { AutocompleteTextControllerOptions, CompletionOption } from "./AutocompleteTextController";
-import { attachAutocomplete } from "./attachAutocomplete";
-import type { AttachAutocompleteOptions } from "./attachAutocomplete";
+import { attachAutocomplete } from "../attachment/attachAutocomplete";
+import type { AttachAutocompleteOptions } from "../attachment/attachAutocomplete";
 
 // Export for ES modules
 export { AutocompleteTextController, attachAutocomplete };
@@ -40,12 +40,12 @@ if (typeof window !== 'undefined') {
   // Also check URL search params
   const urlParams = new URLSearchParams(window.location.search);
   
-  // Get selector from data-selector, data-target, or URL param (default to "input, textarea")
+  // Get selector from data-selector, data-target, or URL param (default to comprehensive selector)
   const selector = getScriptAttr('selector') || 
                    getScriptAttr('target') || 
                    urlParams.get('autocomplete-selector') || 
                    urlParams.get('selector') || 
-                   'input, textarea';
+                   'input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], textarea, [contenteditable="true"]';
   
   // Get completion list from various data attributes or URL param
   // Support: data-completions, data-completionlist, data-list, data-completions-list

@@ -57,22 +57,14 @@
     
     input:focus, textarea:focus {
       outline: none;
-      border-color: #007AFF;
+      /*border-color: #007AFF;*/
     }
     
     textarea {
       min-height: 100px;
       resize: vertical;
     }
-    
-    .instructions {
-      background: #e3f2fd;
-      padding: 15px;
-      border-radius: 4px;
-      margin-top: 15px;
-      font-size: 0.9em;
-      color: #1976d2;
-    }
+
     
     .instructions strong {
       display: block;
@@ -113,11 +105,7 @@
   <div class="demo-section">
     <h2>Input</h2>
       <input id="input1" type="text" placeholder="Start typing..."
-             onchange="console.log('change', event, this.value)"
-             oninput="console.log('input', event, this.value)"
-             onkeypress="console.log('keypress', event, this.value)"
-             onkeyup="console.log('keyup', event, this.value)"
-             onkeydown="console.log('keydown', event, this.value)"
+
       />
   </div>
 
@@ -126,12 +114,6 @@
     <textarea id="textarea1" placeholder="Start typing..."></textarea>
   </div>
 
-  <script src="./dist/automobile-complete.js"
-    data-completions="Te|sting;if| this works"
-  >
-      gir|affes
-      pine|apples
-  </script>
 
 </body>
 </html>

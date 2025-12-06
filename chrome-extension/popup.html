@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 400px;
+      padding: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    h1 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    h1 img {
+      height: 24px;
+      width: 24px;
+      object-fit: contain;
+    }
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+        margin-top: 0px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: 0.3s;
+      border-radius: 24px;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background-color: #4CAF50;
+    }
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(20px);
+    }
+    .toggle-switch input:disabled + .toggle-slider {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .site-toggle-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      padding: 4px;
+      background: #f5f5f5;
+      border-radius: 4px;
+    }
+    .site-toggle-label {
+      font-size: 12px;
+      color: #666;
+    }
+    .restricted-page-message {
+      font-size: 11px;
+      color: #666;
+      font-style: italic;
+      margin-bottom: 16px;
+      padding: 8px;
+      background: #fff3cd;
+      border-radius: 4px;
+      border: 1px solid #ffc107;
+    }
+    label {
+      display: block;
+      margin: 12px 0 4px 0;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 40px;
+        max-height: 120px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      box-sizing: border-box;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    .pattern-match {
+      background-color: #d4edda !important;
+      color: #155724 !important;
+    }
+    .pattern-highlight {
+      color: #4CAF50;
+      font-weight: 500;
+      font-size: 11px;
+      margin-top: 4px;
+    }
+    .help-text {
+      font-size: 11px;
+      color: #666;
+      margin-top: 4px;
+    }
+    .site-info {
+      font-size: 11px;
+      color: #666;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #ddd;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 12px;
+      width: 100%;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .status {
+      margin-top: 12px;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .section {
+      margin-top: 16px;
+    }
+    .hidden {
+        display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>
+    <span style="display: flex; align-items: center; gap: 8px;">
+      <img src="logo.png" alt="Automobile Complete" /> Automobile Complete
+    </span>
+    <label class="toggle-switch">
+      <input type="checkbox" id="modeToggle" />
+      <span class="toggle-slider"></span>
+    </label>
+  </h1>
+  
+  <div class="site-toggle-container" id="siteToggleContainer">
+    <span class="site-toggle-label" id="currentSiteLabel"></span>
+    <label class="toggle-switch">
+      <input type="checkbox" id="siteToggle" />
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+  
+  <div class="restricted-page-message" id="restrictedPageMessage" style="display: none;">
+    Extension cannot run on this page (Chrome internal pages)
+  </div>
+
+  
+  <div class="section">
+    <label for="personalDictionary">Personal Dictionary:</label>
+    <textarea id="personalDictionary" placeholder="prefix|completion&#10;hello|world"></textarea>
+    <div class="help-text">Shared across all sites. Format: prefix|completion</div>
+  </div>
+  
+  <div class="section">
+    <label for="pageDictionary">Page Dictionary:</label>
+    <textarea id="pageDictionary" placeholder="prefix|completion&#10;test|ing&#10;xyz||secret"></textarea>
+    <div class="help-text">Current site only. Format: prefix|completion or alias||replacement</div>
+  </div>
+
+  <div class="section hidden">
+      <label for="globalSelector">Global Default Selector:</label>
+      <input type="text" id="globalSelector" placeholder="<default>" />
+      <div class="help-text">Leave as &lt;default&gt; to auto-detect all inputs</div>
+  </div>
+
+  <div class="section">
+      <label for="siteSelector">Site-Specific Selector (optional):</label>
+      <input type="text" id="siteSelector" placeholder="<default>" />
+      <div class="help-text">Override selector for current site only</div>
+  </div>
+
+  <div id="whitelistSection" style="display: none;" class="section">
+      <label for="whitelist">Enable For Specific Sites:</label>
+      <textarea id="whitelist" placeholder="example.com&#10;*.github.com&#10;https://example.com/path/*"></textarea>
+      <div class="help-text">One per line. Supports: * (any chars), ? (single char), ** (any chars including /)</div>
+  </div>
+
+  <div id="blacklistSection" style="display: none;" class="section">
+      <label for="blacklist">Disable For Specific Sites:</label>
+      <textarea id="blacklist" placeholder="*.example.com/admin/*&#10;example.com/private/*"></textarea>
+      <div class="help-text">One per line. Supports: * (any chars), ? (single char), ** (any chars including /)</div>
+  </div>
+  
+  <button id="save">Save & Apply</button>
+  
+  <div id="status"></div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

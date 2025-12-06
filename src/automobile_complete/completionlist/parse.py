@@ -48,12 +48,19 @@ def parse_completion_file(path: Path) -> list[tuple[str, str, float]]:
             completion_str = line
             freq = 1.0
         
-        # Split prefix|completion
-        if "|" not in completion_str:
-            continue
-        
-        pre, post = completion_str.split("|", 1)
-        completions.append((pre, post, freq))
+        # Check for full replacement separator ||
+        if "||" in completion_str:
+            # Full replacement: prefix||completion means delete prefix and insert completion
+            pre, post = completion_str.split("||", 1)
+            # Convert to backspaces + completion
+            from automobile_complete.utils.terminal.chars import BACKSPACE
+            backspaces = BACKSPACE * len(pre)
+            post = backspaces + post
+            completions.append((pre, post, freq))
+        elif "|" in completion_str:
+            # Normal completion: prefix|completion
+            pre, post = completion_str.split("|", 1)
+            completions.append((pre, post, freq))
     
     return completions
 
@@ -103,12 +110,19 @@ def parse_completion_file_with_weight(path: Path) -> tuple[list[tuple[str, str, 
             completion_str = line
             freq = 1.0
         
-        # Split prefix|completion
-        if "|" not in completion_str:
-            continue
-        
-        pre, post = completion_str.split("|", 1)
-        completions.append((pre, post, freq))
+        # Check for full replacement separator ||
+        if "||" in completion_str:
+            # Full replacement: prefix||completion means delete prefix and insert completion
+            pre, post = completion_str.split("||", 1)
+            # Convert to backspaces + completion
+            from automobile_complete.utils.terminal.chars import BACKSPACE
+            backspaces = BACKSPACE * len(pre)
+            post = backspaces + post
+            completions.append((pre, post, freq))
+        elif "|" in completion_str:
+            # Normal completion: prefix|completion
+            pre, post = completion_str.split("|", 1)
+            completions.append((pre, post, freq))
     
     return completions, weight
 

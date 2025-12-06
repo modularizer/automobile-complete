@@ -1,10 +1,22 @@
 import { Trie } from "./Trie";
 import { TAB, BACKSPACE } from "./constants";
 
+// Type declarations for Chrome extension APIs
+declare const chrome: {
+  storage: {
+    local: {
+      get(keys: string[]): Promise<{ [key: string]: any }>;
+      set(items: { [key: string]: any }): Promise<void>;
+      remove(keys: string[]): Promise<void>;
+    };
+  };
+} | undefined;
+
 export interface CompletionOption {
   typedPrefix: string;
   remainingPrefix: string;
   completion: string;
+  originalCompletion?: string; // Original completion with backspaces preserved (for full replacements)
 }
 
 export type TabBehavior =
@@ -23,6 +35,46 @@ export interface AutocompleteTextControllerOptions {
 
 // Global registry of all controller instances
 const controllerRegistry = new Set<AutocompleteTextController>();
+
+// Storage type for personal dictionary
+export type PersonalDictionaryStorage = 'local' | 'shared' | 'both';
+
+// Helper functions for Chrome extension storage
+function isChromeExtension(): boolean {
+  return typeof chrome !== 'undefined' && 
+         chrome !== null && 
+         typeof chrome.storage !== 'undefined' && 
+         typeof chrome.storage.local !== 'undefined';
+}
+
+async function getChromeStorage(key: string): Promise<string | null> {
+  if (!isChromeExtension() || !chrome) return null;
+  try {
+    const result = await chrome.storage.local.get([key]);
+    return result[key] || null;
+  } catch (e) {
+    console.warn("[AutocompleteTextController] Failed to read from chrome.storage:", e);
+    return null;
+  }
+}
+
+async function setChromeStorage(key: string, value: string): Promise<void> {
+  if (!isChromeExtension() || !chrome) return;
+  try {
+    await chrome.storage.local.set({ [key]: value });
+  } catch (e) {
+    console.warn("[AutocompleteTextController] Failed to write to chrome.storage:", e);
+  }
+}
+
+async function removeChromeStorage(key: string): Promise<void> {
+  if (!isChromeExtension() || !chrome) return;
+  try {
+    await chrome.storage.local.remove([key]);
+  } catch (e) {
+    console.warn("[AutocompleteTextController] Failed to remove from chrome.storage:", e);
+  }
+}
 
 export class AutocompleteTextController {
   private _currentNode: Trie | null = null;
@@ -86,13 +138,22 @@ export class AutocompleteTextController {
       if (typeof window !== 'undefined') {
           (window as any).trie = currentNode;
       }
+      
+      // Log current node prefix and completion whenever it changes
+      if (currentNode) {
+          const prefix = currentNode.prefix || '';
+          const completion = currentNode.completion || '';
+          console.info(`[AutocompleteTextController] currentNode.prefix: "${prefix}" | currentNode.completion: "${completion}"`);
+      } else {
+          console.info('[AutocompleteTextController] currentNode is null');
+      }
   }
   private resetToRoot(){
       // @ts-ignore
       this.setCurrentNode(this._currentNode.root ?? this._currentNode);
   }
-  private walkTo(s: string){
-      this.setCurrentNode(this._currentNode!.walk_to(s))
+  private walkTo(s: string, options?: { handle_control_characters?: boolean }){
+      this.setCurrentNode(this._currentNode!.walk_to(s, options))
   }
 
   private notifyListeners() {
@@ -107,56 +168,57 @@ export class AutocompleteTextController {
   }
 
   initializeTrie(completionList: string) {
-    // console.log("[AutocompleteTextController] initializeTrie called");
+    console.log("[AutocompleteTextController] initializeTrie called with completion list length:", completionList.length);
+    console.log("[AutocompleteTextController] First 200 chars of completion list:", completionList.substring(0, 200));
     try {
     const t = Trie.fromWords(completionList);
-      // console.log("[AutocompleteTextController] Trie created, root children:", Object.keys(t.children));
+      console.log("[AutocompleteTextController] Trie created, root children count:", Object.keys(t.children || {}).length);
+      console.log("[AutocompleteTextController] Sample root children:", Object.keys(t.children || {}).slice(0, 10));
       
-      // Load personal dictionary from localStorage and append with highest priority
+      // Load personal dictionaries from both localStorage (per-domain) and chrome.storage (shared)
+      // Merge them together, with chrome.storage entries taking precedence for conflicts
+      const allDictLines: string[] = [];
+      
+      // Load from localStorage (per-domain)
       if (typeof window !== 'undefined' && window.localStorage) {
         try {
-          const personalDictionary = window.localStorage.getItem('personalDictionary');
-          if (personalDictionary && personalDictionary.trim().length > 0) {
-            console.log("[AutocompleteTextController] Loading personal dictionary from localStorage, length:", personalDictionary.length);
-            // Use a very high frequency (1000000) to ensure personal dictionary entries have highest priority
-            // This will override any conflicting entries from the main completion list
-            const personalDictLines = personalDictionary.split('\n')
+          const localDict = window.localStorage.getItem('personalDictionary');
+          if (localDict && localDict.trim().length > 0) {
+            console.log("[AutocompleteTextController] Loading personal dictionary from localStorage, length:", localDict.length);
+            const lines = localDict.split('\n')
               .map(line => line.trim())
               .filter(line => line.length > 0 && line.includes('|'));
-            
-            console.log("[AutocompleteTextController] Parsed", personalDictLines.length, "personal dictionary entries");
-            
-            for (const line of personalDictLines) {
-              // Parse the line (format: prefix|completion or prefix|completion #freq)
-              let freq = 1000000; // Very high frequency for personal dictionary
-              let processedLine = line;
-              
-              // If line has frequency, use it but ensure it's high
-              if (line.includes(' #')) {
-                const parts = line.split(' #');
-                processedLine = parts.slice(0, -1).join(' #');
-                const existingFreq = parseInt(parts[parts.length - 1], 10);
-                if (!isNaN(existingFreq) && existingFreq > freq) {
-                  freq = existingFreq;
-                }
-              }
-              
-              const [pre, ...postParts] = processedLine.split('|');
-              const post = postParts.join('|').trimEnd();
-              
-              if (pre && post) {
-                // Insert with high frequency - this will override any existing entries
-                t.insert_pair(pre, post, freq);
-                console.log("[AutocompleteTextController] Inserted personal dict entry:", pre, "|", post);
-              }
-            }
-            console.log("[AutocompleteTextController] Personal dictionary loaded:", personalDictLines.length, "entries");
-          } else {
-            console.log("[AutocompleteTextController] No personal dictionary found in localStorage");
+            allDictLines.push(...lines);
+            console.log("[AutocompleteTextController] Loaded", lines.length, "entries from localStorage");
           }
         } catch (e) {
           console.warn("[AutocompleteTextController] Failed to load personal dictionary from localStorage:", e);
         }
+      }
+      
+      // Load from chrome.storage (shared across all pages) - use sync approach with fallback
+      if (isChromeExtension()) {
+        try {
+          // Use a synchronous approach: try to get immediately, if not available, load async and update
+          getChromeStorage('personalDictionary').then(sharedDict => {
+            if (sharedDict && sharedDict.trim().length > 0) {
+              console.log("[AutocompleteTextController] Loading personal dictionary from chrome.storage (async), length:", sharedDict.length);
+              // Re-initialize with the shared dict loaded
+              this.loadAndMergePersonalDictionary(t, sharedDict, allDictLines);
+            }
+          }).catch(e => {
+            console.warn("[AutocompleteTextController] Failed to load personal dictionary from chrome.storage:", e);
+          });
+        } catch (e) {
+          console.warn("[AutocompleteTextController] Failed to access chrome.storage:", e);
+        }
+      }
+      
+      // Insert entries from localStorage (chrome.storage will be loaded async and merged later)
+      this.insertPersonalDictionaryEntries(t, allDictLines);
+      
+      if (allDictLines.length > 0) {
+        console.log("[AutocompleteTextController] Personal dictionary loaded:", allDictLines.length, "entries from localStorage");
       }
       
       this.setCurrentNode(t);
@@ -165,6 +227,117 @@ export class AutocompleteTextController {
     } catch (error) {
       console.error("[AutocompleteTextController] Error initializing trie:", error);
       throw error;
+    }
+  }
+
+  private loadAndMergePersonalDictionary(t: Trie, sharedDict: string, existingLines: string[]) {
+    const sharedLines = sharedDict.split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0 && line.includes('|'));
+    
+    // Merge: shared (chrome.storage) entries override local (localStorage) entries
+    const dictMap = new Map<string, string>();
+    
+    // First add existing (localStorage) entries
+    for (const line of existingLines) {
+      const lineWithoutFreq = line.split(' #')[0];
+      const [pre] = lineWithoutFreq.split('|');
+      if (pre) {
+        dictMap.set(pre.trim().toLowerCase(), line);
+      }
+    }
+    
+    // Then add shared entries (they override local ones)
+    for (const line of sharedLines) {
+      const lineWithoutFreq = line.split(' #')[0];
+      const [pre] = lineWithoutFreq.split('|');
+      if (pre) {
+        dictMap.set(pre.trim().toLowerCase(), line);
+      }
+    }
+    
+    // Insert merged entries into the existing trie
+    const mergedLines = Array.from(dictMap.values());
+    console.log("[AutocompleteTextController] Merged", mergedLines.length, "unique personal dictionary entries (local + shared)");
+    
+    this.insertPersonalDictionaryEntries(t, mergedLines);
+    
+    // Update current node if we're at root
+    if (this._currentNode?.root === t || this._currentNode === t) {
+      this.setCurrentNode(t);
+      this.notifyListeners();
+    }
+  }
+
+  private reinitializeAllControllers(textToRestore: string) {
+    // Update ALL controller instances, not just this one
+    console.log("[AutocompleteTextController] Updating", controllerRegistry.size, "controller instance(s)");
+    let updateCount = 0;
+    controllerRegistry.forEach(controller => {
+      updateCount++;
+      console.log("[AutocompleteTextController] Updating controller", updateCount, "of", controllerRegistry.size);
+      
+      // Get the actual input value for each controller
+      let textToRestoreForController = '';
+      if (controller._inputRef?.current) {
+        textToRestoreForController = controller._inputRef.current.value || '';
+      }
+      if (!textToRestoreForController) {
+        textToRestoreForController = controller.text;
+      }
+      
+      // Reinitialize the trie with the updated personal dictionary
+      controller.initializeTrie(controller._originalCompletionList);
+      
+      // Restore text position after reinitialization
+      if (textToRestoreForController) {
+        controller.resetToRoot();
+        controller.walkTo(textToRestoreForController);
+      } else {
+        controller.resetToRoot();
+      }
+      
+      controller.notifyListeners();
+      console.log("[AutocompleteTextController] Controller", updateCount, "updated. Text restored:", textToRestoreForController);
+    });
+  }
+
+  private insertPersonalDictionaryEntries(t: Trie, lines: string[]) {
+    for (const line of lines) {
+      // Parse the line (format: prefix|completion or prefix|completion #freq)
+      let freq = 1000000; // Very high frequency for personal dictionary
+      let processedLine = line;
+      
+      // If line has frequency, use it but ensure it's high
+      if (line.includes(' #')) {
+        const parts = line.split(' #');
+        processedLine = parts.slice(0, -1).join(' #');
+        const existingFreq = parseInt(parts[parts.length - 1], 10);
+        if (!isNaN(existingFreq) && existingFreq > freq) {
+          freq = existingFreq;
+        }
+      }
+      
+      // Check for full replacement separator ||
+      if (processedLine.includes('||')) {
+        const [pre, ...postParts] = processedLine.split('||');
+        let post = postParts.join('||').trimEnd();
+        // Convert to backspaces + completion
+        const backspaces = BACKSPACE.repeat(pre.length);
+        post = backspaces + post;
+        if (pre && post) {
+          t.insert_pair(pre, post, freq);
+          console.log("[AutocompleteTextController] Inserted personal dict entry (full replacement):", pre, "||", postParts.join('||'));
+        }
+      } else if (processedLine.includes('|')) {
+        const [pre, ...postParts] = processedLine.split('|');
+        const post = postParts.join('|').trimEnd();
+        if (pre && post) {
+          // Insert with high frequency - this will override any existing entries
+          t.insert_pair(pre, post, freq);
+          console.log("[AutocompleteTextController] Inserted personal dict entry:", pre, "|", post);
+        }
+      }
     }
   }
 
@@ -197,6 +370,33 @@ export class AutocompleteTextController {
 
   get availableCompletions(): CompletionOption[] {
     return this._currentNode ? this._currentNode.completionOptions(this._maxCompletions) : [];
+  }
+
+  /**
+   * Get the original completion list used to create this controller
+   */
+  get originalCompletionList(): string {
+    return this._originalCompletionList;
+  }
+
+  /**
+   * Get the current options for this controller
+   */
+  getOptions(): AutocompleteTextControllerOptions {
+    return {
+      maxCompletions: this._maxCompletions,
+      tabBehavior: this._tabBehavior,
+      tabSpacesCount: this._tabSpacesCount,
+      maxLines: this._maxLines,
+    };
+  }
+
+  /**
+   * Create a new controller instance with the same completion list and options
+   * Each element should have its own controller instance to avoid shared state
+   */
+  clone(): AutocompleteTextController {
+    return new AutocompleteTextController(this._originalCompletionList, this.getOptions());
   }
 
   get tabSelectableIndex(): number | null {
@@ -264,26 +464,28 @@ export class AutocompleteTextController {
       return;
     }
 
-    const currentText = this.text;
-    console.log("[AutocompleteTextController] handleTextChange - newText:", newText, "currentText:", currentText, "currentNode prefix:", this._currentNode?.prefix, "completion:", this._currentNode?.completion);
+    // Compare with prefix only, not full_text (which includes completion)
+    // The element text only contains what the user typed (prefix), not the suggestion
+    const currentPrefix = this._currentNode.prefix || "";
+    console.log("[AutocompleteTextController] handleTextChange - newText:", newText, "currentPrefix:", currentPrefix, "currentNode prefix:", this._currentNode?.prefix, "completion:", this._currentNode?.completion);
     
-    // If text matches, we already handled it via key event - skip
-    if (newText === currentText) {
+    // If text matches prefix, we're already in sync - skip
+    if (newText === currentPrefix) {
       return;
     }
     
     // Otherwise, handle it (simple append/delete or complex edit)
-    if (newText.startsWith(currentText) && newText.length > currentText.length) {
+    if (newText.startsWith(currentPrefix) && newText.length > currentPrefix.length) {
       // Simple append
-      const toAppend = newText.slice(currentText.length);
+      const toAppend = newText.slice(currentPrefix.length);
       console.log("[AutocompleteTextController] Simple append, walking to:", toAppend);
       this.walkTo(toAppend);
       this._focusedIndex = null;
       console.log("[AutocompleteTextController] After walk - prefix:", this._currentNode?.prefix, "completion:", this._currentNode?.completion);
       this.notifyListeners();
-    } else if (currentText.startsWith(newText) && newText.length < currentText.length) {
+    } else if (currentPrefix.startsWith(newText) && newText.length < currentPrefix.length) {
       // Simple delete
-      this.walkTo(BACKSPACE.repeat(currentText.length - newText.length));
+      this.walkTo(BACKSPACE.repeat(currentPrefix.length - newText.length));
       this._focusedIndex = null;
       this.notifyListeners();
     } else {
@@ -319,9 +521,14 @@ export class AutocompleteTextController {
   selectCompletion(completion: CompletionOption) {
     if (!this._currentNode) return;
 
+    // Use originalCompletion if available (preserves backspaces for full replacements),
+    // otherwise use the display completion
+    const completionToUse = completion.originalCompletion ?? completion.completion;
+    
     // Walk from current node to append the remaining prefix and completion
-    const textToAppend = completion.remainingPrefix + completion.completion;
-    this.walkTo(textToAppend);
+    // Pass handle_control_characters: true to ensure backspaces are processed
+    const textToAppend = completion.remainingPrefix + completionToUse;
+    this.walkTo(textToAppend, { handle_control_characters: true });
     this._focusedIndex = null;
     this.notifyListeners();
 
@@ -436,10 +643,11 @@ export class AutocompleteTextController {
   }
 
   /**
-   * Adds one or more words to the personal dictionary in localStorage and to the active Trie node.
+   * Adds one or more words to the personal dictionary and to the active Trie node.
    * @param words - A string or array of strings in the format "prefix|completion" or "prefix|completion #freq"
+   * @param storage - Where to save: 'local' (per-domain localStorage), 'shared' (chrome.storage), or 'both' (default)
    */
-  saveWord(words: string | string[]): void {
+  saveWord(words: string | string[], storage: PersonalDictionaryStorage = 'both'): void {
     if (!this._currentNode) {
       console.warn("[AutocompleteTextController] Cannot save word: Trie not initialized");
       return;
@@ -453,15 +661,30 @@ export class AutocompleteTextController {
     const wordArray = Array.isArray(words) ? words : [words];
     const personalDictFreq = 1000000; // High frequency for personal dictionary entries
 
-    // Get existing personal dictionary
-    let existingDict = '';
-    try {
-      const stored = window.localStorage.getItem('personalDictionary');
-      if (stored) {
-        existingDict = stored;
+    // Get existing personal dictionaries from both storages
+    let existingLocalDict = '';
+    let existingSharedDict = '';
+    
+    if (storage === 'local' || storage === 'both') {
+      try {
+        const stored = window.localStorage.getItem('personalDictionary');
+        if (stored) {
+          existingLocalDict = stored;
+        }
+      } catch (e) {
+        console.warn("[AutocompleteTextController] Failed to read personal dictionary from localStorage:", e);
       }
-    } catch (e) {
-      console.warn("[AutocompleteTextController] Failed to read personal dictionary from localStorage:", e);
+    }
+    
+    if (storage === 'shared' || storage === 'both') {
+      if (isChromeExtension()) {
+        // We'll handle async chrome.storage in the save logic
+      } else {
+        console.warn("[AutocompleteTextController] Chrome extension not detected, cannot save to shared storage");
+        if (storage === 'shared') {
+          return; // Can't save to shared if not in extension
+        }
+      }
     }
 
     // Extract prefixes from new words to remove conflicting entries
@@ -499,11 +722,10 @@ export class AutocompleteTextController {
       newWords.push(processedWord);
     }
 
-    // Filter out existing entries that start with any of the new prefixes
-    // or whose prefix starts with any new prefix (e.g., "app" removes "appl|y")
-    let filteredDict = '';
-    if (existingDict) {
-      const existingLines = existingDict.split('\n');
+    // Helper function to filter conflicting entries
+    const filterConflicts = (dict: string): string => {
+      if (!dict) return '';
+      const existingLines = dict.split('\n');
       const filteredLines = existingLines.filter(line => {
         const trimmed = line.trim();
         if (!trimmed || !trimmed.includes('|')) {
@@ -527,16 +749,20 @@ export class AutocompleteTextController {
         return true; // Keep this entry
       });
       
-      filteredDict = filteredLines.join('\n');
-    }
+      return filteredLines.join('\n');
+    };
+    
+    const filteredLocalDict = filterConflicts(existingLocalDict);
+    const filteredSharedDict = storage === 'shared' || storage === 'both' ? '' : existingSharedDict; // Will be loaded async if needed
 
-    // Update localStorage (filtered existing + new words)
-    let updatedDict = '';
-    if (filteredDict && filteredDict.trim()) {
-      updatedDict = `${filteredDict}\n${newWords.join('\n')}`;
-    } else {
-      updatedDict = newWords.join('\n');
-    }
+    // Prepare updated dictionaries
+    const updateDict = (filtered: string): string => {
+      if (filtered && filtered.trim()) {
+        return `${filtered}\n${newWords.join('\n')}`;
+      } else {
+        return newWords.join('\n');
+      }
+    };
     
     try {
       // Get the actual input value before reinitializing (controller might be out of sync)
@@ -549,58 +775,45 @@ export class AutocompleteTextController {
         textToRestore = this.text;
       }
       
-      // Save to localStorage
-      window.localStorage.setItem('personalDictionary', updatedDict);
-      
-      // Verify it was saved correctly
-      const verifySaved = window.localStorage.getItem('personalDictionary');
-      if (verifySaved !== updatedDict) {
-        console.warn("[AutocompleteTextController] localStorage save verification failed");
+      // Save to localStorage if needed
+      if (storage === 'local' || storage === 'both') {
+        const updatedLocalDict = updateDict(filteredLocalDict);
+        window.localStorage.setItem('personalDictionary', updatedLocalDict);
+        console.log("[AutocompleteTextController] Saved to localStorage");
       }
       
-      // Update ALL controller instances, not just this one
-      console.log("[AutocompleteTextController] Updating", controllerRegistry.size, "controller instance(s)");
-      let updateCount = 0;
-      controllerRegistry.forEach(controller => {
-        updateCount++;
-        console.log("[AutocompleteTextController] Updating controller", updateCount, "of", controllerRegistry.size);
-        
-        // Get the actual input value for each controller
-        let textToRestoreForController = '';
-        if (controller._inputRef?.current) {
-          textToRestoreForController = controller._inputRef.current.value || '';
-        }
-        if (!textToRestoreForController) {
-          textToRestoreForController = controller.text;
-        }
-        
-        // Reinitialize the trie with the updated personal dictionary
-        controller.initializeTrie(controller._originalCompletionList);
-        
-        // Restore text position after reinitialization
-        if (textToRestoreForController) {
-          controller.resetToRoot();
-          controller.walkTo(textToRestoreForController);
-        } else {
-          controller.resetToRoot();
-        }
-        
-        controller.notifyListeners();
-        console.log("[AutocompleteTextController] Controller", updateCount, "updated. Text restored:", textToRestoreForController);
-      });
+      // Save to chrome.storage if needed (async)
+      if ((storage === 'shared' || storage === 'both') && isChromeExtension()) {
+        getChromeStorage('personalDictionary').then(existingShared => {
+          const filteredShared = filterConflicts(existingShared || '');
+          const updatedSharedDict = updateDict(filteredShared);
+          return setChromeStorage('personalDictionary', updatedSharedDict);
+        }).then(() => {
+          console.log("[AutocompleteTextController] Saved to chrome.storage");
+          // Reinitialize all controllers after async save completes
+          this.reinitializeAllControllers(textToRestore);
+        }).catch(e => {
+          console.error("[AutocompleteTextController] Failed to save to chrome.storage:", e);
+          // Still reinitialize with local changes even if shared save failed
+          this.reinitializeAllControllers(textToRestore);
+        });
+      } else {
+        // Reinitialize immediately if not using shared storage
+        this.reinitializeAllControllers(textToRestore);
+      }
       
-      console.log("[AutocompleteTextController] Saved", newWords.length, "word(s) to personal dictionary. Updated", controllerRegistry.size, "controller instance(s). Total entries:", updatedDict.split('\n').filter(l => l.trim() && l.includes('|')).length);
+      console.log("[AutocompleteTextController] Saved", newWords.length, "word(s) to", storage, "storage");
     } catch (e) {
       console.error("[AutocompleteTextController] Failed to save personal dictionary to localStorage:", e);
     }
   }
 
   /**
-   * Overwrites the personal dictionary in both localStorage and the active Trie.
-   * This will reinitialize the trie with the original completion list plus the new dictionary.
+   * Overwrites the personal dictionary and reinitializes the trie.
    * @param dictionary - A completion list string in the format "prefix|completion" (one per line)
+   * @param storage - Where to save: 'local' (per-domain localStorage), 'shared' (chrome.storage), or 'both' (default)
    */
-  saveDictionary(dictionary: string): void {
+  saveDictionary(dictionary: string, storage: PersonalDictionaryStorage = 'both'): void {
     if (!this._currentNode) {
       console.warn("[AutocompleteTextController] Cannot save dictionary: Trie not initialized");
       return;
@@ -622,35 +835,26 @@ export class AutocompleteTextController {
         textToRestore = this.text;
       }
       
-      // Save to localStorage
-      window.localStorage.setItem('personalDictionary', dictionary);
+      // Save to localStorage if needed
+      if (storage === 'local' || storage === 'both') {
+        window.localStorage.setItem('personalDictionary', dictionary);
+        console.log("[AutocompleteTextController] Saved to localStorage");
+      }
       
-      // Update ALL controller instances
-      controllerRegistry.forEach(controller => {
-        // Get the actual input value for each controller
-        let textToRestoreForController = '';
-        if (controller._inputRef?.current) {
-          textToRestoreForController = controller._inputRef.current.value || '';
-        }
-        if (!textToRestoreForController) {
-          textToRestoreForController = controller.text;
-        }
-        
-        // Reinitialize the trie with original completion list + new dictionary
-        controller.initializeTrie(controller._originalCompletionList);
-        
-        // Restore text position after reinitialization
-        if (textToRestoreForController) {
-          controller.resetToRoot();
-          controller.walkTo(textToRestoreForController);
-        } else {
-          controller.resetToRoot();
-        }
-        
-        controller.notifyListeners();
-      });
+      // Save to chrome.storage if needed (async)
+      if ((storage === 'shared' || storage === 'both') && isChromeExtension()) {
+        setChromeStorage('personalDictionary', dictionary).then(() => {
+          console.log("[AutocompleteTextController] Saved to chrome.storage");
+          this.reinitializeAllControllers(textToRestore);
+        }).catch(e => {
+          console.error("[AutocompleteTextController] Failed to save to chrome.storage:", e);
+          this.reinitializeAllControllers(textToRestore);
+        });
+      } else {
+        this.reinitializeAllControllers(textToRestore);
+      }
       
-      console.log("[AutocompleteTextController] Saved new personal dictionary to localStorage. Updated", controllerRegistry.size, "controller instance(s)");
+      console.log("[AutocompleteTextController] Saved new personal dictionary to", storage, "storage");
     } catch (e) {
       console.error("[AutocompleteTextController] Failed to save dictionary:", e);
     }
@@ -660,8 +864,9 @@ export class AutocompleteTextController {
    * Removes a word from the personal dictionary.
    * The word parameter should not include the pipe - it will match against both prefix and completion.
    * @param word - A word to remove (matches prefix or completion in entries like "prefix|completion")
+   * @param storage - Where to remove from: 'local' (per-domain localStorage), 'shared' (chrome.storage), or 'both' (default)
    */
-  removeWord(word: string): void {
+  removeWord(word: string, storage: PersonalDictionaryStorage = 'both'): void {
     if (!this._currentNode) {
       console.warn("[AutocompleteTextController] Cannot remove word: Trie not initialized");
       return;
@@ -678,20 +883,17 @@ export class AutocompleteTextController {
       return;
     }
 
-    try {
-      // Get existing personal dictionary
-      const stored = window.localStorage.getItem('personalDictionary');
-      if (!stored || stored.trim().length === 0) {
-        console.log("[AutocompleteTextController] Personal dictionary is empty, nothing to remove");
-        return;
+    // Helper function to filter out matching words
+    const filterWord = (dict: string): { filtered: string; removedCount: number } => {
+      if (!dict || dict.trim().length === 0) {
+        return { filtered: '', removedCount: 0 };
       }
-
-      // Filter out lines that contain the word (in prefix or completion)
-      const lines = stored.split('\n');
+      
+      const lines = dict.split('\n');
       const filteredLines = lines.filter(line => {
         const trimmed = line.trim();
         if (!trimmed || !trimmed.includes('|')) {
-          return true; // Keep invalid lines (they'll be filtered elsewhere)
+          return true; // Keep invalid lines
         }
         
         // Remove frequency suffix if present
@@ -707,58 +909,59 @@ export class AutocompleteTextController {
         return preLower !== wordLower && postLower !== wordLower && 
                !preLower.includes(wordLower) && !postLower.includes(wordLower);
       });
-
-      // Update localStorage
-      const updatedDict = filteredLines.join('\n');
-      window.localStorage.setItem('personalDictionary', updatedDict);
       
+      return { filtered: filteredLines.join('\n'), removedCount: lines.length - filteredLines.length };
+    };
+    
+    try {
       // Get the actual input value before reinitializing
       let textToRestore = '';
       if (this._inputRef?.current) {
         textToRestore = this._inputRef.current.value || '';
       }
-      // Fallback to controller text if no input ref
       if (!textToRestore) {
         textToRestore = this.text;
       }
       
-      // Update ALL controller instances
-      controllerRegistry.forEach(controller => {
-        // Get the actual input value for each controller
-        let textToRestoreForController = '';
-        if (controller._inputRef?.current) {
-          textToRestoreForController = controller._inputRef.current.value || '';
-        }
-        if (!textToRestoreForController) {
-          textToRestoreForController = controller.text;
-        }
-        
-        // Reinitialize the trie to reflect the removal
-        controller.initializeTrie(controller._originalCompletionList);
-        
-        // Restore text position after reinitialization
-        if (textToRestoreForController) {
-          controller.resetToRoot();
-          controller.walkTo(textToRestoreForController);
-        } else {
-          controller.resetToRoot();
-        }
-        
-        controller.notifyListeners();
-      });
+      let totalRemoved = 0;
       
-      const removedCount = lines.length - filteredLines.length;
-      console.log("[AutocompleteTextController] Removed", removedCount, "word(s) from personal dictionary. Updated", controllerRegistry.size, "controller instance(s)");
+      // Remove from localStorage if needed
+      if (storage === 'local' || storage === 'both') {
+        const stored = window.localStorage.getItem('personalDictionary') || '';
+        const { filtered, removedCount } = filterWord(stored);
+        window.localStorage.setItem('personalDictionary', filtered);
+        totalRemoved += removedCount;
+        console.log("[AutocompleteTextController] Removed", removedCount, "word(s) from localStorage");
+      }
+      
+      // Remove from chrome.storage if needed (async)
+      if ((storage === 'shared' || storage === 'both') && isChromeExtension()) {
+        getChromeStorage('personalDictionary').then(stored => {
+          const { filtered, removedCount } = filterWord(stored || '');
+          totalRemoved += removedCount;
+          return setChromeStorage('personalDictionary', filtered);
+        }).then(() => {
+          console.log("[AutocompleteTextController] Removed word(s) from chrome.storage");
+          this.reinitializeAllControllers(textToRestore);
+        }).catch(e => {
+          console.error("[AutocompleteTextController] Failed to remove from chrome.storage:", e);
+          this.reinitializeAllControllers(textToRestore);
+        });
+      } else {
+        this.reinitializeAllControllers(textToRestore);
+      }
+      
+      console.log("[AutocompleteTextController] Removed word(s) from", storage, "storage");
     } catch (e) {
       console.error("[AutocompleteTextController] Failed to remove word from personal dictionary:", e);
     }
   }
 
   /**
-   * Clears the personal dictionary from both localStorage and the active Trie.
-   * This will reinitialize the trie with only the original completion list.
+   * Clears the personal dictionary and reinitializes the trie with only the original completion list.
+   * @param storage - Where to clear from: 'local' (per-domain localStorage), 'shared' (chrome.storage), or 'both' (default)
    */
-  resetCompletions(): void {
+  resetCompletions(storage: PersonalDictionaryStorage = 'both'): void {
     if (!this._currentNode) {
       console.warn("[AutocompleteTextController] Cannot reset completions: Trie not initialized");
       return;
@@ -780,35 +983,26 @@ export class AutocompleteTextController {
         textToRestore = this.text;
       }
       
-      // Clear localStorage
-      window.localStorage.removeItem('personalDictionary');
+      // Clear localStorage if needed
+      if (storage === 'local' || storage === 'both') {
+        window.localStorage.removeItem('personalDictionary');
+        console.log("[AutocompleteTextController] Cleared localStorage");
+      }
       
-      // Update ALL controller instances
-      controllerRegistry.forEach(controller => {
-        // Get the actual input value for each controller
-        let textToRestoreForController = '';
-        if (controller._inputRef?.current) {
-          textToRestoreForController = controller._inputRef.current.value || '';
-        }
-        if (!textToRestoreForController) {
-          textToRestoreForController = controller.text;
-        }
-        
-        // Reinitialize the trie with only the original completion list
-        controller.initializeTrie(controller._originalCompletionList);
-        
-        // Restore text position after reinitialization
-        if (textToRestoreForController) {
-          controller.resetToRoot();
-          controller.walkTo(textToRestoreForController);
-        } else {
-          controller.resetToRoot();
-        }
-        
-        controller.notifyListeners();
-      });
+      // Clear chrome.storage if needed (async)
+      if ((storage === 'shared' || storage === 'both') && isChromeExtension()) {
+        removeChromeStorage('personalDictionary').then(() => {
+          console.log("[AutocompleteTextController] Cleared chrome.storage");
+          this.reinitializeAllControllers(textToRestore);
+        }).catch(e => {
+          console.error("[AutocompleteTextController] Failed to clear chrome.storage:", e);
+          this.reinitializeAllControllers(textToRestore);
+        });
+      } else {
+        this.reinitializeAllControllers(textToRestore);
+      }
       
-      console.log("[AutocompleteTextController] Cleared personal dictionary. Updated", controllerRegistry.size, "controller instance(s)");
+      console.log("[AutocompleteTextController] Cleared personal dictionary from", storage, "storage");
     } catch (e) {
       console.error("[AutocompleteTextController] Failed to reset completions:", e);
     }
@@ -833,17 +1027,24 @@ export class AutocompleteTextController {
   • amc.maxLines               - Maximum lines allowed (null = unlimited)
 
 💾 PERSONAL DICTIONARY:
-  • amc.saveWord('prefix|completion')           - Add word(s) to personal dictionary
-  • amc.saveWord(['word1|comp1', 'word2|comp2']) - Add multiple words at once
-  • amc.saveDictionary('prefix1|comp1\\nprefix2|comp2') - Overwrite entire dictionary
-  • amc.removeWord('word')                     - Remove word(s) from personal dictionary
-  • amc.resetCompletions()                     - Clear entire personal dictionary
+  • amc.saveWord('prefix|completion')           - Add word(s) to personal dictionary (default: saves to both)
+  • amc.saveWord('prefix|completion', 'local')  - Save only to per-domain localStorage
+  • amc.saveWord('prefix|completion', 'shared') - Save only to shared chrome.storage (extension only)
+  • amc.saveWord('prefix|completion', 'both')  - Save to both storages (default)
+  • amc.saveDictionary(dict, storage?)         - Overwrite entire dictionary (storage: 'local'|'shared'|'both')
+  • amc.removeWord('word', storage?)          - Remove word(s) (storage: 'local'|'shared'|'both')
+  • amc.resetCompletions(storage?)            - Clear dictionary (storage: 'local'|'shared'|'both')
   
   ⚠️  IMPORTANT: saveWord() automatically removes conflicting entries!
      - Saves "app|le" removes "app|lication" (same prefix)
      - Saves "app|le" removes "appl|y" (prefix starts with "app")
   
-  Personal dictionary is stored in localStorage as 'personalDictionary'
+  Storage Types:
+  • 'local' - Per-domain localStorage (each website has its own)
+  • 'shared' - chrome.storage (shared across all pages in Chrome extension)
+  • 'both' - Both storages (default)
+  
+  On page load, both storages are loaded and merged (shared entries override local)
   Entries have highest priority (frequency 1000000)
   Changes are applied immediately to all live instances
 

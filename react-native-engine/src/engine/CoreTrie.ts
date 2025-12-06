@@ -189,12 +189,23 @@ export class CoreTrie {
       }
       // Handle backspace character: delete last character and move to parent
       if (ch === BACKSPACE && !(ch in node.children)) {
-        s = s.slice(0, -1); // Remove last character from full text
-        const m = s.match(FINALE_PART);
-        const prefix = m ? m[0] : "";
-        const esc = node.esc;
-        node = node.root.clone(s).walk_to(prefix);
-        node.esc = esc;
+        // Only process backspace if it's not a valid child character
+        if (s.length > 0) {
+          s = s.slice(0, -1); // Remove last character from full text
+          // Find the new prefix from the remaining text
+          const m = s.match(FINALE_PART);
+          const prefix = m ? m[0] : "";
+          const esc = node.esc;
+          // Clone from root with empty full_text, then walk to prefix
+          // This ensures full_text is rebuilt correctly during walk_to
+          node = node.root.clone("");
+          node = node.walk_to(prefix);
+          node.esc = esc;
+          // Update s to match the node's full_text after walking
+          s = node.full_text;
+        }
+        // If s is empty, backspace does nothing - stay at current node
+        // Don't add backspace character to s
       }
       // Handle tab character: accept completion and navigate to it
       else if (handle_control_characters && !node.esc && ch === TAB && node.completion) {
@@ -271,13 +282,22 @@ export class CoreTrie {
           freq = parseInt(freq_str, 10) || 1;
         }
 
-        // Split prefix|completion
-        if (!line.includes("|")) {
-          continue;
+        // Check for full replacement separator ||
+        if (line.includes("||")) {
+          // Full replacement: prefix||completion means delete prefix and insert completion
+          const splitIndex = line.indexOf("||");
+          const pre = line.substring(0, splitIndex);
+          const post = line.substring(splitIndex + 2); // Skip the "||"
+          // Convert to backspaces + completion
+          const backspaces = BACKSPACE.repeat(pre.length);
+          this.insert_pair(pre, backspaces + post, freq);
+        } else if (line.includes("|")) {
+          // Normal completion: prefix|completion
+          const splitIndex = line.indexOf("|");
+          const pre = line.substring(0, splitIndex);
+          const post = line.substring(splitIndex + 1); // Skip the "|"
+          this.insert_pair(pre, post, freq);
         }
-        const [pre, ...postParts] = line.split("|");
-        const post = postParts.join("|").trimEnd(); // Trim trailing spaces from completion
-        this.insert_pair(pre, post, freq);
       }
     }
     return this;
@@ -286,24 +306,22 @@ export class CoreTrie {
   insert_pair(pre: string, post: string, freq: number = 1): void {
     let node: CoreTrie = this;
     const root = this.root;
-    const ci = this.case_insensitive;
+    const T = CoreTrie;
 
     for (const ch of pre) {
-      // Use lowercase key for case-insensitive matching (same as walk_to)
-      const k = ci ? ch.toLowerCase() : ch;
-      if (k in node.children) {
-        const child = node.children[k];
+      if (ch in node.children) {
+        const child = node.children[ch];
         node = child;
       } else {
-        // very lightweight child creation
-        const child = new CoreTrie({
+        // very lightweight child creation, see #2
+        const child = new T({
           completion: "",
           children: {},
           root: root,
           parent: node,
           prefix: node.prefix + ch,
         });
-        node.children[k] = child;
+        node.children[ch] = child;
         node = child;
       }
     }
@@ -393,7 +411,7 @@ export class CoreTrie {
    * @param maxCompletions - Maximum number of completions to return. If provided, returns the most frequent ones.
    * @returns Array of objects with typedPrefix, remainingPrefix, and completion strings
    */
-  completionOptions(maxCompletions?: number): Array<{ typedPrefix: string; remainingPrefix: string; completion: string }> {
+  completionOptions(maxCompletions?: number): Array<{ typedPrefix: string; remainingPrefix: string; completion: string; originalCompletion?: string }> {
     const currentNodePrefix = this.prefix.toLowerCase();
     const options = this.list_options(maxCompletions);
     
@@ -402,7 +420,31 @@ export class CoreTrie {
       const fullPrefix = opt.prefix;
       const prefixLower = fullPrefix.toLowerCase();
       
-      // Find how much of the prefix matches the current node's prefix
+      // Check if completion starts with backspaces (full replacement)
+      let completion = opt.completion;
+      let backspaceCount = 0;
+      const originalCompletion = completion; // Preserve original with backspaces
+      if (completion.startsWith(BACKSPACE)) {
+        // Count leading backspaces
+        while (completion[backspaceCount] === BACKSPACE) {
+          backspaceCount++;
+        }
+        // Remove backspaces from completion for display
+        completion = completion.substring(backspaceCount);
+        
+        // For full replacement, the prefix will be deleted, so:
+        // - typedPrefix should show what will be replaced (strikethrough or different style)
+        // - remainingPrefix should be empty (everything is replaced)
+        // - completion should show the replacement text
+        return {
+          typedPrefix: fullPrefix, // The entire prefix that will be replaced
+          remainingPrefix: "", // No remaining prefix for full replacements
+          completion: completion, // The replacement text (backspaces removed for display)
+          originalCompletion: originalCompletion, // Original with backspaces for actual insertion
+        };
+      }
+      
+      // Normal completion: find how much of the prefix matches the current node's prefix
       let matchedLength = 0;
       for (let i = 0; i < Math.min(currentNodePrefix.length, prefixLower.length); i++) {
         if (currentNodePrefix[i] === prefixLower[i]) {
@@ -415,7 +457,8 @@ export class CoreTrie {
       return {
         typedPrefix: fullPrefix.substring(0, matchedLength), // Part matching current node prefix (black with highlight)
         remainingPrefix: fullPrefix.substring(matchedLength), // Rest of prefix (black, no highlight)
-        completion: opt.completion, // Completion (grey)
+        completion: completion, // Completion (grey)
+        originalCompletion: originalCompletion, // Same as completion for normal completions
       };
     });
   }

@@ -63,6 +63,9 @@ def build_completionlist(
     # Create word frequency dict once (for efficient lookup later)
     word_freq_dict = dict(all_words)
     
+    # Create word-to-index dict once (for efficient lookup later)
+    word_index_dict = {word: i for i, (word, _) in enumerate(all_words)}
+    
     # Build trie
     anchor_freq = all_words[0][1] if all_words else 1.0
     tree: Node = Node.build(all_words, anchor_freq)
@@ -95,7 +98,7 @@ def build_completionlist(
         # Find frequency for this word
         word_freq = word_freq_dict.get(word, 1.0)
         # Find original index in wordlist
-        word_index = next((i for i, (w, _) in enumerate(all_words) if w == word), len(all_words))
+        word_index = word_index_dict.get(word, len(all_words))
         
         if preserve_freqs:
             rounded_freq = int(round(word_freq))

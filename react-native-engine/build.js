@@ -45,6 +45,21 @@ esbuild
   .then(() => {
     console.log('✅ Build successful!');
     console.log(`   Output: ${buildOptions.outfile}`);
+    
+    // Automatically copy to chrome-extension folder
+    const extensionDir = path.join(__dirname, '..', 'chrome-extension');
+    const extensionDest = path.join(extensionDir, 'automobile-complete.js');
+    
+    if (fs.existsSync(extensionDir)) {
+      try {
+        fs.copyFileSync(buildOptions.outfile, extensionDest);
+        console.log(`   📦 Copied to: ${extensionDest}`);
+      } catch (error) {
+        console.warn(`   ⚠️  Failed to copy to extension folder: ${error.message}`);
+      }
+    } else {
+      console.log(`   ℹ️  Extension folder not found at ${extensionDir}, skipping copy`);
+    }
   })
   .catch((error) => {
     console.error('❌ Build failed:', error);

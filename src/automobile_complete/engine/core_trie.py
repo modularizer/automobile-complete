@@ -343,9 +343,18 @@ class CoreTrie:
                 line, freq_str = line.rsplit(" #", 1)
                 freq = int(freq_str)
 
-            # Split prefix|completion
-            pre, post = line.split("|", 1)
-            self.insert_pair(pre, post, freq)
+            # Check for full replacement separator ||
+            if "||" in line:
+                # Full replacement: prefix||completion means delete prefix and insert completion
+                pre, post = line.split("||", 1)
+                # Convert to backspaces + completion
+                backspaces = BACKSPACE * len(pre)
+                post = backspaces + post
+                self.insert_pair(pre, post, freq)
+            elif "|" in line:
+                # Normal completion: prefix|completion
+                pre, post = line.split("|", 1)
+                self.insert_pair(pre, post, freq)
 
         return self
 

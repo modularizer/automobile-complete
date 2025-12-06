@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "Automobile Complete",
+  "version": "1.0.0",
+  "description": "Universal autocomplete for any input field",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "baked-completions.js",
+        "automobile-complete.js",
+        "content-script.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false,
+      "match_about_blank": false
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Automobile Complete"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "automobile-complete.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}

@@ -58,6 +58,9 @@ export default function CompletionDropdownOption({
   // Style as focused if actually focused OR if it's the tab-selectable option
   const shouldShowFocused = isFocused || isTabSelectable;
 
+  // Check if this is a full replacement (remainingPrefix is empty and typedPrefix matches full prefix)
+  const isFullReplacement = completion.remainingPrefix === "" && completion.typedPrefix.length > 0;
+
   // Check if any part contains newlines
   const hasNewlines =
     completion.typedPrefix.includes("\n") ||
@@ -80,45 +83,88 @@ export default function CompletionDropdownOption({
         // Multiline rendering: use a single Text component with nested Text for proper wrapping
           //@ts-ignore
         <Text style={mergedStyles.completionTextContainer}>
-          {completion.typedPrefix ? (
-            <Text style={[mergedStyles.completionTyped, { backgroundColor: "#e3f2fd" }]}>
-              {completion.typedPrefix}
-            </Text>
-          ) : null}
-          {completion.remainingPrefix ? (
-            <Text style={mergedStyles.completionRemainingPrefix}>
-              {completion.remainingPrefix}
-            </Text>
-          ) : null}
-          {completion.completion ? (
-            <Text style={mergedStyles.completionPostfix} numberOfLines={undefined}>
-              {completion.completion}
-            </Text>
-          ) : null}
+          {isFullReplacement ? (
+            // Full replacement: show prefix with strikethrough, then replacement
+            <>
+              {completion.typedPrefix ? (
+                <Text style={[mergedStyles.completionTyped, { backgroundColor: "#e3f2fd", textDecorationLine: "line-through" }]}>
+                  {completion.typedPrefix}
+                </Text>
+              ) : null}
+              {completion.completion ? (
+                <Text style={mergedStyles.completionPostfix} numberOfLines={undefined}>
+                  {completion.completion}
+                </Text>
+              ) : null}
+            </>
+          ) : (
+            // Normal completion
+            <>
+              {completion.typedPrefix ? (
+                <Text style={[mergedStyles.completionTyped, { backgroundColor: "#e3f2fd" }]}>
+                  {completion.typedPrefix}
+                </Text>
+              ) : null}
+              {completion.remainingPrefix ? (
+                <Text style={mergedStyles.completionRemainingPrefix}>
+                  {completion.remainingPrefix}
+                </Text>
+              ) : null}
+              {completion.completion ? (
+                <Text style={mergedStyles.completionPostfix} numberOfLines={undefined}>
+                  {completion.completion}
+                </Text>
+              ) : null}
+            </>
+          )}
         </Text>
       ) : (
         // Single-line rendering: wrap in Text to preserve whitespace (especially leading spaces in completion)
         <Text>
-          {completion.typedPrefix ? (
-            <Text
-              style={[
-                mergedStyles.completionTyped,
-                { backgroundColor: themeStyles.highlightContainer.backgroundColor },
-              ]}
-            >
-              {completion.typedPrefix}
-            </Text>
-          ) : null}
-          {completion.remainingPrefix ? (
-            <Text style={mergedStyles.completionRemainingPrefix}>
-              {completion.remainingPrefix}
-            </Text>
-          ) : null}
-          {completion.completion ? (
-            <Text style={mergedStyles.completionPostfix}>
-              {completion.completion}
-            </Text>
-          ) : null}
+          {isFullReplacement ? (
+            // Full replacement: show prefix with strikethrough, then replacement
+            <>
+              {completion.typedPrefix ? (
+                <Text
+                  style={[
+                    mergedStyles.completionTyped,
+                    { backgroundColor: themeStyles.highlightContainer.backgroundColor, textDecorationLine: "line-through" },
+                  ]}
+                >
+                  {completion.typedPrefix}
+                </Text>
+              ) : null}
+              {completion.completion ? (
+                <Text style={mergedStyles.completionPostfix}>
+                  {completion.completion}
+                </Text>
+              ) : null}
+            </>
+          ) : (
+            // Normal completion
+            <>
+              {completion.typedPrefix ? (
+                <Text
+                  style={[
+                    mergedStyles.completionTyped,
+                    { backgroundColor: themeStyles.highlightContainer.backgroundColor },
+                  ]}
+                >
+                  {completion.typedPrefix}
+                </Text>
+              ) : null}
+              {completion.remainingPrefix ? (
+                <Text style={mergedStyles.completionRemainingPrefix}>
+                  {completion.remainingPrefix}
+                </Text>
+              ) : null}
+              {completion.completion ? (
+                <Text style={mergedStyles.completionPostfix}>
+                  {completion.completion}
+                </Text>
+              ) : null}
+            </>
+          )}
         </Text>
       )}
     </TouchableOpacity>
