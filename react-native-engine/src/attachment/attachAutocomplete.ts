@@ -38,7 +38,6 @@ import {
 } from "./config";
 import {attachAutocompleteBySelector} from "./selectorAttachment";
 import {CompletionOverlay} from "./overlay";
-import {injectStyles} from "./overlay/styles";
 import {getTextManipulator} from "./textManipulation";
 
 // Re-export for backwards compatibility
@@ -153,12 +152,6 @@ export function attachAutocomplete(
     return () => {};
   }
 
-  const {
-    wrapperClass = DEFAULT_ATTACHMENT_OPTIONS.wrapperClass!,
-    overlayClass = DEFAULT_ATTACHMENT_OPTIONS.overlayClass!,
-    suggestionClass = DEFAULT_ATTACHMENT_OPTIONS.suggestionClass!,
-    customStyles,
-  } = options || {};
 
   // Handle ancestor/descendant conflicts: prefer child over parent
   const attachedInputDescendant = el.querySelector('input[data-automobile-complete-attached], textarea[data-automobile-complete-attached], [contenteditable="true"][data-automobile-complete-attached]');
@@ -190,20 +183,16 @@ export function attachAutocomplete(
   // Wrap attachment logic in try-catch to ensure cleanup on failure
   try {
   
-  // Create overlay component (handles border management internally)
-  const overlay = new CompletionOverlay(el, controller, {
-    ...options,
-    wrapperClass,
-    overlayClass,
-    suggestionClass
-  });
+  // Create overlay component
+  const overlay = new CompletionOverlay(el, controller);
   
   // Set controller ref
   const ref = { current: el };
   controller.setInputRef(ref);
-
-  // Inject default styles if not already present
-  injectStyles(customStyles);
+  
+  // Store original caret color and set to green for monitored elements
+  const originalCaretColor = el.style.caretColor;
+  el.style.caretColor = 'green';
 
   // Update overlay based on current element text - never modifies the element
   const updateOverlayFromElement = () => {
@@ -264,6 +253,12 @@ export function attachAutocomplete(
       el.removeEventListener('keydown', handleKeyDown, true);
       el.removeEventListener('input', handleInput, false);
       el.removeAttribute('data-automobile-complete-attached');
+      // Restore original caret color
+      if (originalCaretColor) {
+        el.style.caretColor = originalCaretColor;
+      } else {
+        el.style.removeProperty('caret-color');
+      }
       attachingElements.delete(el);
       globalAttachedElements.delete(el);
       overlay.destroy();

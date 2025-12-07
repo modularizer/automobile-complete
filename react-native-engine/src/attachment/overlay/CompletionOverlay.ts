@@ -5,8 +5,6 @@
  */
 
 import {AutocompleteTextController} from "../../engine/AutocompleteTextController";
-import {AttachAutocompleteOptions} from "../config";
-import {getElementInfo} from "../elementDetection";
 
 export interface OverlayUpdate {
   text: string;
@@ -18,60 +16,21 @@ export interface OverlayUpdate {
  * Handles creating, updating, and managing the overlay DOM element.
  */
 export class CompletionOverlay {
-  protected overlay: HTMLDivElement;
-  protected wrapper: HTMLDivElement;
   protected inputElement: HTMLElement;
   protected controller: AutocompleteTextController;
-  protected options: AttachAutocompleteOptions;
   private shadowHost: HTMLElement | null = null;
   private shadowOverlay: HTMLElement | null = null;
-  private borderWasApplied: boolean = false;
-  private originalBorder: string = '';
-  private originalBorderWidth: string = '';
-  private originalBorderStyle: string = '';
-  private originalBorderColor: string = '';
-  private originalBoxSizing: string = '';
-  private originalZIndex: string = '';
-  private originalPosition: string = '';
-  private originalOutline: string = '';
-  private originalPadding: string = '';
-  private originalPaddingLeft: string = '';
+  private shadowHighlight: HTMLElement | null = null;
 
   constructor(
     inputElement: HTMLElement,
-    controller: AutocompleteTextController,
-    options: AttachAutocompleteOptions
+    controller: AutocompleteTextController
   ) {
     this.inputElement = inputElement;
     this.controller = controller;
-    this.options = options;
 
-    // Store original styles before any modifications
-    this.storeOriginalStyles();
-
-    // Create wrapper
-    this.wrapper = document.createElement('div');
-    this.wrapper.className = options.wrapperClass || 'autocomplete-wrapper';
-
-    // Create overlay (kept for compatibility, but we'll use shadow DOM)
-    this.overlay = document.createElement('div');
-    this.overlay.className = options.overlayClass || 'autocomplete-overlay';
-    
     // Create Shadow DOM overlay - isolated from page CSS
     this.createShadowOverlay();
-
-    // Insert wrapper before input
-    const parent = inputElement.parentElement;
-    if (!parent) {
-      throw new Error('Input element must have a parent');
-    }
-
-    parent.insertBefore(this.wrapper, inputElement);
-    this.wrapper.appendChild(inputElement);
-    // Don't append overlay to wrapper - it's in document.body
-
-    // Apply debug border if appropriate
-    this.applyDebugBorder();
   }
 
   /**
@@ -111,165 +70,53 @@ export class CompletionOverlay {
       });
       caretOverlay.textContent = '';
       
+      // Highlight element for showing characters that will be replaced
+      const highlightOverlay = document.createElement('div');
+      Object.assign(highlightOverlay.style, {
+        position: 'fixed',
+        left: '0px',
+        top: '0px',
+        backgroundColor: 'rgba(128, 128, 128, 0.3)',
+        pointerEvents: 'none',
+        visibility: 'hidden',
+        zIndex: '2147483646', // Just below completion overlay
+      });
+      
       shadow.appendChild(caretOverlay);
+      shadow.appendChild(highlightOverlay);
       
       this.shadowHost = host;
       this.shadowOverlay = caretOverlay;
+      this.shadowHighlight = highlightOverlay;
     } else {
       // Reuse existing shadow host
       this.shadowHost = host;
       const shadow = host.shadowRoot;
       if (shadow) {
-        this.shadowOverlay = shadow.firstElementChild as HTMLElement;
+        const children = Array.from(shadow.children);
+        this.shadowOverlay = children[0] as HTMLElement;
+        // Highlight is second child, or create it if missing
+        if (children.length > 1) {
+          this.shadowHighlight = children[1] as HTMLElement;
+        } else {
+          // Create highlight if it doesn't exist
+          const highlightOverlay = document.createElement('div');
+          Object.assign(highlightOverlay.style, {
+            position: 'fixed',
+            left: '0px',
+            top: '0px',
+            backgroundColor: 'rgba(128, 128, 128, 0.3)',
+            pointerEvents: 'none',
+            visibility: 'hidden',
+            zIndex: '2147483646',
+          });
+          shadow.appendChild(highlightOverlay);
+          this.shadowHighlight = highlightOverlay;
+        }
       }
     }
   }
 
-  /**
-   * Store original styles before applying any modifications
-   */
-  private storeOriginalStyles(): void {
-    this.originalBorder = this.inputElement.style.border;
-    this.originalBorderWidth = this.inputElement.style.borderWidth;
-    this.originalBorderStyle = this.inputElement.style.borderStyle;
-    this.originalBorderColor = this.inputElement.style.borderColor;
-    this.originalBoxSizing = this.inputElement.style.boxSizing;
-    this.originalZIndex = this.inputElement.style.zIndex;
-    this.originalPosition = this.inputElement.style.position;
-    this.originalOutline = this.inputElement.style.outline;
-    this.originalPadding = this.inputElement.style.padding;
-    this.originalPaddingLeft = this.inputElement.style.paddingLeft;
-  }
-
-  /**
-   * Apply debug border to visualize attached elements
-   * Only applies if this is the top-level attached element (no attached parent or child)
-   */
-  private applyDebugBorder(): void {
-    const wrapperClass = this.options.wrapperClass || 'autocomplete-wrapper';
-    
-    // Check if this element has an attached parent or child - if so, don't show border
-    // (We still attach functionality, but only show border on the top-level element)
-    let shouldShowBorder = true;
-    
-    // Check if any parent is already attached
-    let checkParent = this.inputElement.parentElement;
-    while (checkParent) {
-      if (checkParent.hasAttribute('data-automobile-complete-attached') || 
-          checkParent.classList.contains(wrapperClass)) {
-        shouldShowBorder = false;
-        console.log('[Automobile Complete] Parent already attached, skipping border on child:', getElementInfo(this.inputElement));
-        break;
-      }
-      checkParent = checkParent.parentElement;
-    }
-    
-    // Check if any child is already attached
-    if (shouldShowBorder) {
-      const attachedChild = this.inputElement.querySelector('[data-automobile-complete-attached]');
-      if (attachedChild) {
-        shouldShowBorder = false;
-        console.log('[Automobile Complete] Child already attached, skipping border on parent:', getElementInfo(this.inputElement));
-      }
-    }
-    
-    if (shouldShowBorder) {
-      this.borderWasApplied = true;
-      
-      // ONLY apply border - don't change position, z-index, padding, or any other styles
-      // Use !important to ensure the border is visible even if other CSS tries to override it
-      // Use bright green (#00FF00) for maximum visibility
-      // Thinner border with rounded corners for better aesthetics
-      this.inputElement.style.setProperty('border', '2px solid #00FF00', 'important');
-      this.inputElement.style.setProperty('border-radius', '4px', 'important');
-      
-      // Also set individual border properties as backup (some browsers need this)
-      this.inputElement.style.setProperty('border-width', '2px', 'important');
-      this.inputElement.style.setProperty('border-style', 'solid', 'important');
-      this.inputElement.style.setProperty('border-color', '#00FF00', 'important');
-      
-      // Debug: Log the computed styles to verify they're applied
-      setTimeout(() => {
-        const computed = window.getComputedStyle(this.inputElement);
-        console.log('[Automobile Complete] Border debug for element:', getElementInfo(this.inputElement), this.inputElement);
-        console.log('  - border:', computed.border);
-        console.log('  - border-color:', computed.borderColor);
-        console.log('  - border-width:', computed.borderWidth);
-        console.log('  - z-index:', computed.zIndex);
-        console.log('  - position:', computed.position);
-      }, 100);
-    }
-  }
-
-  /**
-   * Restore original border styles
-   */
-  private restoreBorderStyles(): void {
-    if (!this.borderWasApplied) {
-      return;
-    }
-
-    // Restore original border style
-    if (this.originalBorder) {
-      this.inputElement.style.border = this.originalBorder;
-    } else {
-      // Restore individual border properties if they existed
-      if (this.originalBorderWidth) {
-        this.inputElement.style.borderWidth = this.originalBorderWidth;
-      } else {
-        this.inputElement.style.removeProperty('border-width');
-      }
-      if (this.originalBorderStyle) {
-        this.inputElement.style.borderStyle = this.originalBorderStyle;
-      } else {
-        this.inputElement.style.removeProperty('border-style');
-      }
-      if (this.originalBorderColor) {
-        this.inputElement.style.borderColor = this.originalBorderColor;
-      } else {
-        this.inputElement.style.removeProperty('border-color');
-      }
-      this.inputElement.style.removeProperty('border');
-    }
-    
-    if (this.originalBoxSizing) {
-      this.inputElement.style.boxSizing = this.originalBoxSizing;
-    } else {
-      this.inputElement.style.removeProperty('box-sizing');
-    }
-    
-    // Restore original z-index and position
-    if (this.originalZIndex) {
-      this.inputElement.style.zIndex = this.originalZIndex;
-    } else {
-      this.inputElement.style.removeProperty('z-index');
-    }
-    if (this.originalPosition) {
-      this.inputElement.style.position = this.originalPosition;
-    } else {
-      this.inputElement.style.removeProperty('position');
-    }
-    
-    // Restore original outline
-    if (this.originalOutline) {
-      this.inputElement.style.outline = this.originalOutline;
-    } else {
-      this.inputElement.style.removeProperty('outline');
-      this.inputElement.style.removeProperty('outline-offset');
-    }
-    
-    // Restore original padding
-    if (this.originalPadding) {
-      this.inputElement.style.padding = this.originalPadding;
-    } else {
-      this.inputElement.style.removeProperty('padding');
-    }
-    if (this.originalPaddingLeft) {
-      this.inputElement.style.paddingLeft = this.originalPaddingLeft;
-    } else {
-      this.inputElement.style.removeProperty('padding-left');
-    }
-  }
 
   /**
    * Update the overlay content based on controller state
@@ -278,50 +125,8 @@ export class CompletionOverlay {
     const text = this.controller.text;
     const suggestion = this.controller.suggestion;
 
-    // Match input's computed styles exactly
-    this.syncStyles();
-
-    // COMPLETELY NEW OVERLAY SYSTEM: Use CSS custom properties and native cursor position
+    // Update shadow DOM overlay
     this.updateOverlayCompletely(text, suggestion);
-  }
-
-  /**
-   * Sync overlay styles to match the input element
-   */
-  protected syncStyles(): void {
-    const inputStyles = window.getComputedStyle(this.inputElement);
-
-    // Copy all relevant styles to match input positioning
-    this.overlay.style.fontSize = inputStyles.fontSize;
-    this.overlay.style.fontFamily = inputStyles.fontFamily;
-    this.overlay.style.fontWeight = inputStyles.fontWeight;
-    this.overlay.style.fontStyle = inputStyles.fontStyle;
-    this.overlay.style.lineHeight = inputStyles.lineHeight;
-    this.overlay.style.padding = inputStyles.padding;
-    this.overlay.style.paddingLeft = inputStyles.paddingLeft;
-    this.overlay.style.paddingRight = inputStyles.paddingRight;
-    this.overlay.style.paddingTop = inputStyles.paddingTop;
-    this.overlay.style.paddingBottom = inputStyles.paddingBottom;
-    this.overlay.style.border = 'none';
-    this.overlay.style.borderRadius = inputStyles.borderRadius;
-    this.overlay.style.boxSizing = inputStyles.boxSizing;
-    this.overlay.style.textAlign = inputStyles.textAlign;
-    this.overlay.style.width = inputStyles.width;
-    this.overlay.style.height = inputStyles.height;
-    this.overlay.style.minHeight = inputStyles.minHeight;
-    this.overlay.style.letterSpacing = inputStyles.letterSpacing;
-    this.overlay.style.textIndent = inputStyles.textIndent;
-
-    // Match vertical alignment - inputs are typically centered, textareas and contenteditable start at top
-    if (this.inputElement.tagName === 'INPUT') {
-      this.overlay.style.display = 'flex';
-      this.overlay.style.alignItems = 'center';
-      this.overlay.style.flexWrap = 'nowrap';
-    } else if (this.inputElement.tagName === 'TEXTAREA' || 
-               this.inputElement.contentEditable === 'true' || 
-               this.inputElement.isContentEditable) {
-      this.overlay.style.display = 'block';
-    }
   }
 
   /**
@@ -335,10 +140,18 @@ export class CompletionOverlay {
     if (!suggestion) {
       this.shadowOverlay.style.visibility = 'hidden';
       this.shadowOverlay.textContent = '';
+      if (this.shadowHighlight) {
+        this.shadowHighlight.style.visibility = 'hidden';
+      }
       return;
     }
     
-    const cleanSuggestion = suggestion.replaceAll("\b", "");
+    // Count backspaces at the start
+    let backspaceCount = 0;
+    while (backspaceCount < suggestion.length && suggestion[backspaceCount] === '\b') {
+      backspaceCount++;
+    }
+    const cleanSuggestion = suggestion.substring(backspaceCount);
     
     // Get cursor position using unified caret tracker
     const cursorPos = this.getUnifiedCaretPosition();
@@ -346,16 +159,13 @@ export class CompletionOverlay {
     if (!cursorPos) {
       this.shadowOverlay.style.visibility = 'hidden';
       this.shadowOverlay.textContent = '';
+      if (this.shadowHighlight) {
+        this.shadowHighlight.style.visibility = 'hidden';
+      }
       return;
     }
     
-    // Update shadow overlay position and content
-    this.shadowOverlay.style.left = `${cursorPos.left}px`;
-    this.shadowOverlay.style.top = `${cursorPos.top - 2}px`;
-    this.shadowOverlay.textContent = cleanSuggestion;
-    this.shadowOverlay.style.visibility = 'visible';
-    
-    // Match input font styles
+    // Match input font styles first (needed for baseline calculation)
     const inputStyles = window.getComputedStyle(this.inputElement);
     this.shadowOverlay.style.fontSize = inputStyles.fontSize;
     this.shadowOverlay.style.fontFamily = inputStyles.fontFamily;
@@ -363,6 +173,202 @@ export class CompletionOverlay {
     this.shadowOverlay.style.fontStyle = inputStyles.fontStyle;
     this.shadowOverlay.style.lineHeight = inputStyles.lineHeight;
     this.shadowOverlay.style.letterSpacing = inputStyles.letterSpacing;
+    
+    // Calculate baseline offset to align overlay text with input text
+    const baselineOffset = this.calculateBaselineOffset(inputStyles);
+    
+    // Update shadow overlay position and content
+    this.shadowOverlay.style.left = `${cursorPos.left}px`;
+    this.shadowOverlay.style.top = `${cursorPos.top - baselineOffset}px`;
+    this.shadowOverlay.textContent = cleanSuggestion;
+    this.shadowOverlay.style.visibility = 'visible';
+    
+    // Add background to block content behind - adapt to dark/light mode
+    const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    this.shadowOverlay.style.backgroundColor = isDarkMode ? '#1a1a1a' : '#ffffff';
+    this.shadowOverlay.style.padding = '0 0px';
+    this.shadowOverlay.style.margin = '0';
+    
+    // Add left border to simulate cursor so it doesn't disappear behind the background
+    // Use green to match the caret color we set on the input
+    this.shadowOverlay.style.borderLeft = '1px solid green';
+    this.shadowOverlay.style.paddingLeft = '1px'; // Adjust padding to account for border
+    
+    // Show highlight for characters that will be replaced
+    if (backspaceCount > 0 && this.shadowHighlight) {
+      this.updateReplacementHighlight(cursorPos, backspaceCount, inputStyles);
+    } else if (this.shadowHighlight) {
+      this.shadowHighlight.style.visibility = 'hidden';
+    }
+  }
+
+  /**
+   * Calculate a small baseline offset adjustment (max ±5px) for aligning overlay text
+   * Different element types return cursor positions at different vertical positions
+   */
+  private calculateBaselineOffset(inputStyles: CSSStyleDeclaration): number {
+    const fontSize = parseFloat(inputStyles.fontSize) || 16;
+    const lineHeight = parseFloat(inputStyles.lineHeight) || fontSize;
+
+    // Determine element type to adjust offset accordingly
+    const isContentEditable = this.inputElement.contentEditable === 'true' || this.inputElement.isContentEditable;
+    const isTextarea = this.inputElement.tagName === 'TEXTAREA';
+    const isInput = this.inputElement.tagName === 'INPUT';
+
+    let offset = 0;
+
+    if (isContentEditable) {
+      // For contenteditable, cursorPos.top is already at the baseline
+      // Small adjustment for visual alignment
+      offset = 2;
+    } else if (isTextarea) {
+      // For textarea, cursorPos.top is at the top of the line
+      // Need to move down slightly to align with baseline
+      offset = 2 + fontSize * 0.15; // Small percentage of font size, max 5px
+    } else if (isInput) {
+      // For input, cursorPos.top is vertically centered
+      // Calculate small adjustment to align with baseline
+      offset = 2 + (lineHeight / 2) - (fontSize * 0.8);
+    }
+
+    // Clamp to ±5px maximum
+    return Math.max(-3, Math.min(3, offset));
+  }
+
+  /**
+   * Update the gray highlight showing which characters will be replaced
+   * Uses same reliable method as completion - measure text width, use negative marginLeft
+   */
+  private updateReplacementHighlight(cursorPos: { left: number; top: number }, backspaceCount: number, inputStyles: CSSStyleDeclaration): void {
+    if (!this.shadowHighlight) return;
+    
+    // Get cursor character position
+    const cursorCharPos = this.getCursorPosition();
+    if (cursorCharPos === null || cursorCharPos < backspaceCount) {
+      this.shadowHighlight.style.visibility = 'hidden';
+      return;
+    }
+    
+    // Get the text that will be replaced (backspaceCount characters before cursor)
+    const input = this.inputElement.tagName === 'INPUT' || this.inputElement.tagName === 'TEXTAREA'
+      ? this.inputElement as HTMLInputElement | HTMLTextAreaElement
+      : null;
+    
+    let textToReplace = '';
+    if (input) {
+      textToReplace = input.value.substring(cursorCharPos - backspaceCount, cursorCharPos);
+    } else if (this.inputElement.contentEditable === 'true' || this.inputElement.isContentEditable) {
+      const textContent = this.inputElement.textContent || '';
+      textToReplace = textContent.substring(cursorCharPos - backspaceCount, cursorCharPos);
+    }
+    
+    if (!textToReplace) {
+      this.shadowHighlight.style.visibility = 'hidden';
+      return;
+    }
+    
+    // Measure the width of text to replace using same method as completion
+    const span = document.createElement('span');
+    span.style.position = 'fixed';
+    span.style.visibility = 'hidden';
+    span.style.whiteSpace = 'pre';
+    span.style.fontSize = inputStyles.fontSize;
+    span.style.fontFamily = inputStyles.fontFamily;
+    span.style.fontWeight = inputStyles.fontWeight;
+    span.style.fontStyle = inputStyles.fontStyle;
+    span.style.letterSpacing = inputStyles.letterSpacing;
+    span.textContent = textToReplace;
+    document.body.appendChild(span);
+    
+    try {
+      const width = span.getBoundingClientRect().width;
+      const lineHeight = parseFloat(inputStyles.lineHeight) || parseFloat(inputStyles.fontSize) || 16;
+      
+      if (width <= 0 || width > 10000) {
+        this.shadowHighlight.style.visibility = 'hidden';
+        return;
+      }
+      
+      // Position at cursor (same as completion), extend backwards with negative marginLeft
+      this.shadowHighlight.style.left = `${cursorPos.left}px`;
+      this.shadowHighlight.style.top = `${cursorPos.top}px`;
+      this.shadowHighlight.style.width = `${width}px`;
+      this.shadowHighlight.style.height = `${lineHeight}px`;
+      this.shadowHighlight.style.marginLeft = `-${width}px`;
+      this.shadowHighlight.style.visibility = 'visible';
+    } finally {
+      document.body.removeChild(span);
+    }
+  }
+
+  /**
+   * Get cursor position (character index)
+   */
+  private getCursorPosition(): number | null {
+    if (this.inputElement.tagName === 'INPUT' || this.inputElement.tagName === 'TEXTAREA') {
+      const input = this.inputElement as HTMLInputElement | HTMLTextAreaElement;
+      return input.selectionStart ?? null;
+    } else if (this.inputElement.contentEditable === 'true' || this.inputElement.isContentEditable) {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        return null;
+      }
+      const range = selection.getRangeAt(0);
+      if (!this.inputElement.contains(range.commonAncestorContainer)) {
+        return null;
+      }
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(this.inputElement);
+      preCaretRange.setEnd(range.endContainer, range.endOffset);
+      return preCaretRange.toString().length;
+    }
+    return null;
+  }
+
+  /**
+   * Get position of a specific character index
+   */
+  private getCharacterPosition(charIndex: number): { left: number; top: number } | null {
+    // For contenteditable: use Range API
+    if (this.inputElement.contentEditable === 'true' || this.inputElement.isContentEditable) {
+      try {
+        // Create a range at the character position
+        const textContent = this.inputElement.textContent || '';
+        if (charIndex > textContent.length) return null;
+        
+        const newRange = document.createRange();
+        newRange.selectNodeContents(this.inputElement);
+        
+        // Move to character position using TreeWalker
+        let currentPos = 0;
+        const walker = document.createTreeWalker(
+          this.inputElement,
+          NodeFilter.SHOW_TEXT,
+          null
+        );
+        
+        let node;
+        while ((node = walker.nextNode()) && currentPos < charIndex) {
+          const nodeLength = node.textContent?.length || 0;
+          if (currentPos + nodeLength >= charIndex) {
+            newRange.setStart(node, charIndex - currentPos);
+            break;
+          }
+          currentPos += nodeLength;
+        }
+        
+        newRange.collapse(true);
+        const rect = newRange.getBoundingClientRect();
+        return { left: rect.left, top: rect.top };
+      } catch (e) {
+        return null;
+      }
+    }
+    
+    // For input/textarea: use existing measurement method with the character index
+    const input = this.inputElement as HTMLInputElement | HTMLTextAreaElement;
+    // getInputCaretPosition expects selectionStart, so we can use charIndex directly
+    return this.getInputCaretPosition(input, charIndex);
   }
 
   /**
@@ -501,171 +507,16 @@ export class CompletionOverlay {
     }
   }
 
-  /**
-   * Get cursor position rectangle using native browser APIs
-   */
-  private getNativeCursorRect(): DOMRect | null {
-    // For contenteditable: use Range API - most reliable
-    if (this.inputElement.contentEditable === 'true' || this.inputElement.isContentEditable) {
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        try {
-          const range = selection.getRangeAt(0);
-          if (this.inputElement.contains(range.commonAncestorContainer)) {
-            const collapsedRange = range.cloneRange();
-            collapsedRange.collapse(true);
-            return collapsedRange.getBoundingClientRect();
-          }
-        } catch (e) {
-          return null;
-        }
-      }
-      return null;
-    }
-    
-    // For input/textarea: measure using temporary elements
-    const input = this.inputElement as HTMLInputElement | HTMLTextAreaElement;
-    const selectionStart = input.selectionStart;
-    if (selectionStart === null) return null;
-    
-    const computed = window.getComputedStyle(this.inputElement);
-    const inputRect = input.getBoundingClientRect();
-    const textBeforeCursor = input.value.substring(0, selectionStart);
-    
-    if (input.tagName === 'TEXTAREA') {
-      // Handle multiline
-      const lines = textBeforeCursor.split('\n');
-      const lineIndex = lines.length - 1;
-      const lineText = lines[lineIndex] || '';
-      
-      const lineSpan = document.createElement('span');
-      lineSpan.style.position = 'fixed';
-      lineSpan.style.visibility = 'hidden';
-      lineSpan.style.whiteSpace = 'pre';
-      lineSpan.style.fontSize = computed.fontSize;
-      lineSpan.style.fontFamily = computed.fontFamily;
-      lineSpan.style.fontWeight = computed.fontWeight;
-      lineSpan.style.fontStyle = computed.fontStyle;
-      lineSpan.style.letterSpacing = computed.letterSpacing;
-      lineSpan.textContent = lineText;
-      document.body.appendChild(lineSpan);
-      
-      try {
-        const lineRect = lineSpan.getBoundingClientRect();
-        const paddingLeft = parseFloat(computed.paddingLeft) || 0;
-        const paddingTop = parseFloat(computed.paddingTop) || 0;
-        const lineHeight = parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) || 16;
-        
-        return new DOMRect(
-          inputRect.left + paddingLeft + lineRect.width,
-          inputRect.top + paddingTop + (lineHeight * lineIndex),
-          0,
-          lineHeight
-        );
-      } finally {
-        document.body.removeChild(lineSpan);
-      }
-    } else {
-      // Single line input
-      const span = document.createElement('span');
-      span.style.position = 'fixed';
-      span.style.visibility = 'hidden';
-      span.style.whiteSpace = 'pre';
-      span.style.fontSize = computed.fontSize;
-      span.style.fontFamily = computed.fontFamily;
-      span.style.fontWeight = computed.fontWeight;
-      span.style.fontStyle = computed.fontStyle;
-      span.style.letterSpacing = computed.letterSpacing;
-      span.textContent = textBeforeCursor;
-      document.body.appendChild(span);
-      
-      try {
-        const spanRect = span.getBoundingClientRect();
-        const paddingLeft = parseFloat(computed.paddingLeft) || 0;
-        const paddingTop = parseFloat(computed.paddingTop) || 0;
-        const lineHeight = parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) || 16;
-        const inputHeight = inputRect.height;
-        const verticalCenter = (inputHeight - lineHeight) / 2;
-        
-        return new DOMRect(
-          inputRect.left + paddingLeft + spanRect.width,
-          inputRect.top + paddingTop + verticalCenter,
-          0,
-          lineHeight
-        );
-      } finally {
-        document.body.removeChild(span);
-      }
-    }
-  }
-
-
-  /**
-   * Update the overlay content (text + suggestion)
-   * Override this in subclasses for different display styles
-   */
-  protected updateContent(text: string, suggestion: string | null): void {
-    const suggestionClass = this.options.suggestionClass || 'autocomplete-suggestion';
-
-    
-    if (suggestion) {
-        suggestion = suggestion?.replaceAll("\b", "")
-
-      this.overlay.innerHTML = `
-        <span style="color: transparent; white-space: pre;">${this.escapeHtml(text)}</span><span class="${suggestionClass}">${this.escapeHtml(suggestion)}</span>
-      `;
-    } else {
-      this.overlay.innerHTML = `<span style="color: transparent; white-space: pre;">${this.escapeHtml(text)}</span>`;
-    }
-  }
-
-
-  /**
-   * Escape HTML to prevent XSS
-   */
-  protected escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
 
   /**
    * Cleanup and remove the overlay
    */
   destroy(): void {
-    // Restore border styles
-    this.restoreBorderStyles();
-    
     // Hide shadow overlay (but don't remove host - it's shared)
     if (this.shadowOverlay) {
       this.shadowOverlay.style.visibility = 'hidden';
       this.shadowOverlay.textContent = '';
     }
-    
-    // Remove old overlay if it exists
-    if (this.overlay.parentNode) {
-      this.overlay.parentNode.removeChild(this.overlay);
-    }
-    
-    // Restore original structure
-    if (this.wrapper.parentElement) {
-      this.wrapper.parentElement.insertBefore(this.inputElement, this.wrapper);
-      this.wrapper.remove();
-    }
-  }
-
-  /**
-   * Get the wrapper element
-   */
-  getWrapper(): HTMLDivElement {
-    return this.wrapper;
-  }
-
-  /**
-   * Get the overlay element
-   */
-  getOverlay(): HTMLDivElement {
-    return this.overlay;
   }
 }
 

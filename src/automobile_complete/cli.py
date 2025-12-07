@@ -12,6 +12,7 @@ from automobile_complete.wordlist.merge.cli import main as wordlist_merge_main
 from automobile_complete.completionlist.cli import main as preprocess_main
 from automobile_complete.completionlist.merge.cli import main as preprocess_merge_main
 from automobile_complete.run.cli import main as run_main
+from automobile_complete.build.cli import main as build_main
 
 
 def setup_main():
@@ -21,6 +22,7 @@ def setup_main():
     2. Merge wordlists (amcmw)
     3. Generate completionlist (amcc)
     4. Merge completionlists (amcmc)
+    5. Build react-native-engine (amc build)
     """
     import sys
     
@@ -29,6 +31,7 @@ def setup_main():
         ("Merging wordlists", wordlist_merge_main),
         ("Generating completionlist", preprocess_main),
         ("Merging completionlists", preprocess_merge_main),
+        ("Building react-native-engine", build_main),
     ]
     
     print("Running setup pipeline...", file=sys.stderr)
@@ -85,6 +88,8 @@ def main():
         'preprocess-merge': preprocess_merge_main,
         'cm': preprocess_merge_main,  # 'cm' for completionlist-merge
         'setup': setup_main,
+        'build': build_main,
+        'b': build_main,  # 'b' for build
         'run': run_main,
         'r': run_main,
     }
@@ -127,7 +132,8 @@ Commands:
     wordlist-merge, wm    Merge multiple wordlist files with weights
     preprocess, c         Preprocess wordlist into completion list (prefix|completion format)
     preprocess-merge, cm  Merge multiple completion lists with conflict resolution
-    setup                 Run complete setup pipeline (w -> wm -> c -> cm)
+    setup                 Run complete setup pipeline (w -> wm -> c -> cm -> build)
+    build, b              Build react-native-engine (runs npm run build)
     run, r                Interactive autocomplete CLI (default if no command specified)
 
 Examples:
@@ -149,6 +155,10 @@ Examples:
     
     # Run complete setup pipeline
     amc setup
+    
+    # Build react-native-engine
+    amc build
+    amc b
     
     # Interactive autocomplete (default)
     amc completions.txt

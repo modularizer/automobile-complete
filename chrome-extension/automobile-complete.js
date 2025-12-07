@@ -1839,41 +1839,15 @@ ${newWords.join("\n")}`;
 
   // src/attachment/overlay/CompletionOverlay.ts
   var CompletionOverlay = class {
-    constructor(inputElement, controller, options) {
-      __publicField(this, "overlay");
-      __publicField(this, "wrapper");
+    constructor(inputElement, controller) {
       __publicField(this, "inputElement");
       __publicField(this, "controller");
-      __publicField(this, "options");
       __publicField(this, "shadowHost", null);
       __publicField(this, "shadowOverlay", null);
-      __publicField(this, "borderWasApplied", false);
-      __publicField(this, "originalBorder", "");
-      __publicField(this, "originalBorderWidth", "");
-      __publicField(this, "originalBorderStyle", "");
-      __publicField(this, "originalBorderColor", "");
-      __publicField(this, "originalBoxSizing", "");
-      __publicField(this, "originalZIndex", "");
-      __publicField(this, "originalPosition", "");
-      __publicField(this, "originalOutline", "");
-      __publicField(this, "originalPadding", "");
-      __publicField(this, "originalPaddingLeft", "");
+      __publicField(this, "shadowHighlight", null);
       this.inputElement = inputElement;
       this.controller = controller;
-      this.options = options;
-      this.storeOriginalStyles();
-      this.wrapper = document.createElement("div");
-      this.wrapper.className = options.wrapperClass || "autocomplete-wrapper";
-      this.overlay = document.createElement("div");
-      this.overlay.className = options.overlayClass || "autocomplete-overlay";
       this.createShadowOverlay();
-      const parent = inputElement.parentElement;
-      if (!parent) {
-        throw new Error("Input element must have a parent");
-      }
-      parent.insertBefore(this.wrapper, inputElement);
-      this.wrapper.appendChild(inputElement);
-      this.applyDebugBorder();
     }
     /**
      * Create isolated Shadow DOM overlay that can't be affected by page CSS
@@ -1904,130 +1878,45 @@ ${newWords.join("\n")}`;
           visibility: "hidden"
         });
         caretOverlay.textContent = "";
+        const highlightOverlay = document.createElement("div");
+        Object.assign(highlightOverlay.style, {
+          position: "fixed",
+          left: "0px",
+          top: "0px",
+          backgroundColor: "rgba(128, 128, 128, 0.3)",
+          pointerEvents: "none",
+          visibility: "hidden",
+          zIndex: "2147483646"
+          // Just below completion overlay
+        });
         shadow.appendChild(caretOverlay);
+        shadow.appendChild(highlightOverlay);
         this.shadowHost = host;
         this.shadowOverlay = caretOverlay;
+        this.shadowHighlight = highlightOverlay;
       } else {
         this.shadowHost = host;
         const shadow = host.shadowRoot;
         if (shadow) {
-          this.shadowOverlay = shadow.firstElementChild;
+          const children = Array.from(shadow.children);
+          this.shadowOverlay = children[0];
+          if (children.length > 1) {
+            this.shadowHighlight = children[1];
+          } else {
+            const highlightOverlay = document.createElement("div");
+            Object.assign(highlightOverlay.style, {
+              position: "fixed",
+              left: "0px",
+              top: "0px",
+              backgroundColor: "rgba(128, 128, 128, 0.3)",
+              pointerEvents: "none",
+              visibility: "hidden",
+              zIndex: "2147483646"
+            });
+            shadow.appendChild(highlightOverlay);
+            this.shadowHighlight = highlightOverlay;
+          }
         }
-      }
-    }
-    /**
-     * Store original styles before applying any modifications
-     */
-    storeOriginalStyles() {
-      this.originalBorder = this.inputElement.style.border;
-      this.originalBorderWidth = this.inputElement.style.borderWidth;
-      this.originalBorderStyle = this.inputElement.style.borderStyle;
-      this.originalBorderColor = this.inputElement.style.borderColor;
-      this.originalBoxSizing = this.inputElement.style.boxSizing;
-      this.originalZIndex = this.inputElement.style.zIndex;
-      this.originalPosition = this.inputElement.style.position;
-      this.originalOutline = this.inputElement.style.outline;
-      this.originalPadding = this.inputElement.style.padding;
-      this.originalPaddingLeft = this.inputElement.style.paddingLeft;
-    }
-    /**
-     * Apply debug border to visualize attached elements
-     * Only applies if this is the top-level attached element (no attached parent or child)
-     */
-    applyDebugBorder() {
-      const wrapperClass = this.options.wrapperClass || "autocomplete-wrapper";
-      let shouldShowBorder = true;
-      let checkParent = this.inputElement.parentElement;
-      while (checkParent) {
-        if (checkParent.hasAttribute("data-automobile-complete-attached") || checkParent.classList.contains(wrapperClass)) {
-          shouldShowBorder = false;
-          console.log("[Automobile Complete] Parent already attached, skipping border on child:", getElementInfo(this.inputElement));
-          break;
-        }
-        checkParent = checkParent.parentElement;
-      }
-      if (shouldShowBorder) {
-        const attachedChild = this.inputElement.querySelector("[data-automobile-complete-attached]");
-        if (attachedChild) {
-          shouldShowBorder = false;
-          console.log("[Automobile Complete] Child already attached, skipping border on parent:", getElementInfo(this.inputElement));
-        }
-      }
-      if (shouldShowBorder) {
-        this.borderWasApplied = true;
-        this.inputElement.style.setProperty("border", "2px solid #00FF00", "important");
-        this.inputElement.style.setProperty("border-radius", "4px", "important");
-        this.inputElement.style.setProperty("border-width", "2px", "important");
-        this.inputElement.style.setProperty("border-style", "solid", "important");
-        this.inputElement.style.setProperty("border-color", "#00FF00", "important");
-        setTimeout(() => {
-          const computed = window.getComputedStyle(this.inputElement);
-          console.log("[Automobile Complete] Border debug for element:", getElementInfo(this.inputElement), this.inputElement);
-          console.log("  - border:", computed.border);
-          console.log("  - border-color:", computed.borderColor);
-          console.log("  - border-width:", computed.borderWidth);
-          console.log("  - z-index:", computed.zIndex);
-          console.log("  - position:", computed.position);
-        }, 100);
-      }
-    }
-    /**
-     * Restore original border styles
-     */
-    restoreBorderStyles() {
-      if (!this.borderWasApplied) {
-        return;
-      }
-      if (this.originalBorder) {
-        this.inputElement.style.border = this.originalBorder;
-      } else {
-        if (this.originalBorderWidth) {
-          this.inputElement.style.borderWidth = this.originalBorderWidth;
-        } else {
-          this.inputElement.style.removeProperty("border-width");
-        }
-        if (this.originalBorderStyle) {
-          this.inputElement.style.borderStyle = this.originalBorderStyle;
-        } else {
-          this.inputElement.style.removeProperty("border-style");
-        }
-        if (this.originalBorderColor) {
-          this.inputElement.style.borderColor = this.originalBorderColor;
-        } else {
-          this.inputElement.style.removeProperty("border-color");
-        }
-        this.inputElement.style.removeProperty("border");
-      }
-      if (this.originalBoxSizing) {
-        this.inputElement.style.boxSizing = this.originalBoxSizing;
-      } else {
-        this.inputElement.style.removeProperty("box-sizing");
-      }
-      if (this.originalZIndex) {
-        this.inputElement.style.zIndex = this.originalZIndex;
-      } else {
-        this.inputElement.style.removeProperty("z-index");
-      }
-      if (this.originalPosition) {
-        this.inputElement.style.position = this.originalPosition;
-      } else {
-        this.inputElement.style.removeProperty("position");
-      }
-      if (this.originalOutline) {
-        this.inputElement.style.outline = this.originalOutline;
-      } else {
-        this.inputElement.style.removeProperty("outline");
-        this.inputElement.style.removeProperty("outline-offset");
-      }
-      if (this.originalPadding) {
-        this.inputElement.style.padding = this.originalPadding;
-      } else {
-        this.inputElement.style.removeProperty("padding");
-      }
-      if (this.originalPaddingLeft) {
-        this.inputElement.style.paddingLeft = this.originalPaddingLeft;
-      } else {
-        this.inputElement.style.removeProperty("padding-left");
       }
     }
     /**
@@ -2036,40 +1925,7 @@ ${newWords.join("\n")}`;
     update() {
       const text = this.controller.text;
       const suggestion = this.controller.suggestion;
-      this.syncStyles();
       this.updateOverlayCompletely(text, suggestion);
-    }
-    /**
-     * Sync overlay styles to match the input element
-     */
-    syncStyles() {
-      const inputStyles = window.getComputedStyle(this.inputElement);
-      this.overlay.style.fontSize = inputStyles.fontSize;
-      this.overlay.style.fontFamily = inputStyles.fontFamily;
-      this.overlay.style.fontWeight = inputStyles.fontWeight;
-      this.overlay.style.fontStyle = inputStyles.fontStyle;
-      this.overlay.style.lineHeight = inputStyles.lineHeight;
-      this.overlay.style.padding = inputStyles.padding;
-      this.overlay.style.paddingLeft = inputStyles.paddingLeft;
-      this.overlay.style.paddingRight = inputStyles.paddingRight;
-      this.overlay.style.paddingTop = inputStyles.paddingTop;
-      this.overlay.style.paddingBottom = inputStyles.paddingBottom;
-      this.overlay.style.border = "none";
-      this.overlay.style.borderRadius = inputStyles.borderRadius;
-      this.overlay.style.boxSizing = inputStyles.boxSizing;
-      this.overlay.style.textAlign = inputStyles.textAlign;
-      this.overlay.style.width = inputStyles.width;
-      this.overlay.style.height = inputStyles.height;
-      this.overlay.style.minHeight = inputStyles.minHeight;
-      this.overlay.style.letterSpacing = inputStyles.letterSpacing;
-      this.overlay.style.textIndent = inputStyles.textIndent;
-      if (this.inputElement.tagName === "INPUT") {
-        this.overlay.style.display = "flex";
-        this.overlay.style.alignItems = "center";
-        this.overlay.style.flexWrap = "nowrap";
-      } else if (this.inputElement.tagName === "TEXTAREA" || this.inputElement.contentEditable === "true" || this.inputElement.isContentEditable) {
-        this.overlay.style.display = "block";
-      }
     }
     /**
      * BACK TO BASICS: Use the original simple approach that actually worked
@@ -2081,19 +1937,25 @@ ${newWords.join("\n")}`;
       if (!suggestion) {
         this.shadowOverlay.style.visibility = "hidden";
         this.shadowOverlay.textContent = "";
+        if (this.shadowHighlight) {
+          this.shadowHighlight.style.visibility = "hidden";
+        }
         return;
       }
-      const cleanSuggestion = suggestion.replaceAll("\b", "");
+      let backspaceCount = 0;
+      while (backspaceCount < suggestion.length && suggestion[backspaceCount] === "\b") {
+        backspaceCount++;
+      }
+      const cleanSuggestion = suggestion.substring(backspaceCount);
       const cursorPos = this.getUnifiedCaretPosition();
       if (!cursorPos) {
         this.shadowOverlay.style.visibility = "hidden";
         this.shadowOverlay.textContent = "";
+        if (this.shadowHighlight) {
+          this.shadowHighlight.style.visibility = "hidden";
+        }
         return;
       }
-      this.shadowOverlay.style.left = `${cursorPos.left}px`;
-      this.shadowOverlay.style.top = `${cursorPos.top - 2}px`;
-      this.shadowOverlay.textContent = cleanSuggestion;
-      this.shadowOverlay.style.visibility = "visible";
       const inputStyles = window.getComputedStyle(this.inputElement);
       this.shadowOverlay.style.fontSize = inputStyles.fontSize;
       this.shadowOverlay.style.fontFamily = inputStyles.fontFamily;
@@ -2101,6 +1963,153 @@ ${newWords.join("\n")}`;
       this.shadowOverlay.style.fontStyle = inputStyles.fontStyle;
       this.shadowOverlay.style.lineHeight = inputStyles.lineHeight;
       this.shadowOverlay.style.letterSpacing = inputStyles.letterSpacing;
+      const baselineOffset = this.calculateBaselineOffset(inputStyles);
+      this.shadowOverlay.style.left = `${cursorPos.left}px`;
+      this.shadowOverlay.style.top = `${cursorPos.top - baselineOffset}px`;
+      this.shadowOverlay.textContent = cleanSuggestion;
+      this.shadowOverlay.style.visibility = "visible";
+      const isDarkMode = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      this.shadowOverlay.style.backgroundColor = isDarkMode ? "#1a1a1a" : "#ffffff";
+      this.shadowOverlay.style.padding = "0 0px";
+      this.shadowOverlay.style.margin = "0";
+      this.shadowOverlay.style.borderLeft = "1px solid green";
+      this.shadowOverlay.style.paddingLeft = "1px";
+      if (backspaceCount > 0 && this.shadowHighlight) {
+        this.updateReplacementHighlight(cursorPos, backspaceCount, inputStyles);
+      } else if (this.shadowHighlight) {
+        this.shadowHighlight.style.visibility = "hidden";
+      }
+    }
+    /**
+     * Calculate a small baseline offset adjustment (max ±5px) for aligning overlay text
+     * Different element types return cursor positions at different vertical positions
+     */
+    calculateBaselineOffset(inputStyles) {
+      const fontSize = parseFloat(inputStyles.fontSize) || 16;
+      const lineHeight = parseFloat(inputStyles.lineHeight) || fontSize;
+      const isContentEditable3 = this.inputElement.contentEditable === "true" || this.inputElement.isContentEditable;
+      const isTextarea = this.inputElement.tagName === "TEXTAREA";
+      const isInput = this.inputElement.tagName === "INPUT";
+      let offset = 0;
+      if (isContentEditable3) {
+        offset = 2;
+      } else if (isTextarea) {
+        offset = 2 + fontSize * 0.15;
+      } else if (isInput) {
+        offset = 2 + lineHeight / 2 - fontSize * 0.8;
+      }
+      return Math.max(-3, Math.min(3, offset));
+    }
+    /**
+     * Update the gray highlight showing which characters will be replaced
+     * Uses same reliable method as completion - measure text width, use negative marginLeft
+     */
+    updateReplacementHighlight(cursorPos, backspaceCount, inputStyles) {
+      if (!this.shadowHighlight)
+        return;
+      const cursorCharPos = this.getCursorPosition();
+      if (cursorCharPos === null || cursorCharPos < backspaceCount) {
+        this.shadowHighlight.style.visibility = "hidden";
+        return;
+      }
+      const input = this.inputElement.tagName === "INPUT" || this.inputElement.tagName === "TEXTAREA" ? this.inputElement : null;
+      let textToReplace = "";
+      if (input) {
+        textToReplace = input.value.substring(cursorCharPos - backspaceCount, cursorCharPos);
+      } else if (this.inputElement.contentEditable === "true" || this.inputElement.isContentEditable) {
+        const textContent = this.inputElement.textContent || "";
+        textToReplace = textContent.substring(cursorCharPos - backspaceCount, cursorCharPos);
+      }
+      if (!textToReplace) {
+        this.shadowHighlight.style.visibility = "hidden";
+        return;
+      }
+      const span = document.createElement("span");
+      span.style.position = "fixed";
+      span.style.visibility = "hidden";
+      span.style.whiteSpace = "pre";
+      span.style.fontSize = inputStyles.fontSize;
+      span.style.fontFamily = inputStyles.fontFamily;
+      span.style.fontWeight = inputStyles.fontWeight;
+      span.style.fontStyle = inputStyles.fontStyle;
+      span.style.letterSpacing = inputStyles.letterSpacing;
+      span.textContent = textToReplace;
+      document.body.appendChild(span);
+      try {
+        const width = span.getBoundingClientRect().width;
+        const lineHeight = parseFloat(inputStyles.lineHeight) || parseFloat(inputStyles.fontSize) || 16;
+        if (width <= 0 || width > 1e4) {
+          this.shadowHighlight.style.visibility = "hidden";
+          return;
+        }
+        this.shadowHighlight.style.left = `${cursorPos.left}px`;
+        this.shadowHighlight.style.top = `${cursorPos.top}px`;
+        this.shadowHighlight.style.width = `${width}px`;
+        this.shadowHighlight.style.height = `${lineHeight}px`;
+        this.shadowHighlight.style.marginLeft = `-${width}px`;
+        this.shadowHighlight.style.visibility = "visible";
+      } finally {
+        document.body.removeChild(span);
+      }
+    }
+    /**
+     * Get cursor position (character index)
+     */
+    getCursorPosition() {
+      if (this.inputElement.tagName === "INPUT" || this.inputElement.tagName === "TEXTAREA") {
+        const input = this.inputElement;
+        return input.selectionStart ?? null;
+      } else if (this.inputElement.contentEditable === "true" || this.inputElement.isContentEditable) {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) {
+          return null;
+        }
+        const range = selection.getRangeAt(0);
+        if (!this.inputElement.contains(range.commonAncestorContainer)) {
+          return null;
+        }
+        const preCaretRange = range.cloneRange();
+        preCaretRange.selectNodeContents(this.inputElement);
+        preCaretRange.setEnd(range.endContainer, range.endOffset);
+        return preCaretRange.toString().length;
+      }
+      return null;
+    }
+    /**
+     * Get position of a specific character index
+     */
+    getCharacterPosition(charIndex) {
+      if (this.inputElement.contentEditable === "true" || this.inputElement.isContentEditable) {
+        try {
+          const textContent = this.inputElement.textContent || "";
+          if (charIndex > textContent.length)
+            return null;
+          const newRange = document.createRange();
+          newRange.selectNodeContents(this.inputElement);
+          let currentPos = 0;
+          const walker = document.createTreeWalker(
+            this.inputElement,
+            NodeFilter.SHOW_TEXT,
+            null
+          );
+          let node;
+          while ((node = walker.nextNode()) && currentPos < charIndex) {
+            const nodeLength = node.textContent?.length || 0;
+            if (currentPos + nodeLength >= charIndex) {
+              newRange.setStart(node, charIndex - currentPos);
+              break;
+            }
+            currentPos += nodeLength;
+          }
+          newRange.collapse(true);
+          const rect = newRange.getBoundingClientRect();
+          return { left: rect.left, top: rect.top };
+        } catch (e) {
+          return null;
+        }
+      }
+      const input = this.inputElement;
+      return this.getInputCaretPosition(input, charIndex);
     }
     /**
      * Unified caret tracker - works for both input/textarea and contenteditable
@@ -2219,196 +2228,15 @@ ${newWords.join("\n")}`;
       }
     }
     /**
-     * Get cursor position rectangle using native browser APIs
-     */
-    getNativeCursorRect() {
-      if (this.inputElement.contentEditable === "true" || this.inputElement.isContentEditable) {
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          try {
-            const range = selection.getRangeAt(0);
-            if (this.inputElement.contains(range.commonAncestorContainer)) {
-              const collapsedRange = range.cloneRange();
-              collapsedRange.collapse(true);
-              return collapsedRange.getBoundingClientRect();
-            }
-          } catch (e) {
-            return null;
-          }
-        }
-        return null;
-      }
-      const input = this.inputElement;
-      const selectionStart = input.selectionStart;
-      if (selectionStart === null)
-        return null;
-      const computed = window.getComputedStyle(this.inputElement);
-      const inputRect = input.getBoundingClientRect();
-      const textBeforeCursor = input.value.substring(0, selectionStart);
-      if (input.tagName === "TEXTAREA") {
-        const lines = textBeforeCursor.split("\n");
-        const lineIndex = lines.length - 1;
-        const lineText = lines[lineIndex] || "";
-        const lineSpan = document.createElement("span");
-        lineSpan.style.position = "fixed";
-        lineSpan.style.visibility = "hidden";
-        lineSpan.style.whiteSpace = "pre";
-        lineSpan.style.fontSize = computed.fontSize;
-        lineSpan.style.fontFamily = computed.fontFamily;
-        lineSpan.style.fontWeight = computed.fontWeight;
-        lineSpan.style.fontStyle = computed.fontStyle;
-        lineSpan.style.letterSpacing = computed.letterSpacing;
-        lineSpan.textContent = lineText;
-        document.body.appendChild(lineSpan);
-        try {
-          const lineRect = lineSpan.getBoundingClientRect();
-          const paddingLeft = parseFloat(computed.paddingLeft) || 0;
-          const paddingTop = parseFloat(computed.paddingTop) || 0;
-          const lineHeight = parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) || 16;
-          return new DOMRect(
-            inputRect.left + paddingLeft + lineRect.width,
-            inputRect.top + paddingTop + lineHeight * lineIndex,
-            0,
-            lineHeight
-          );
-        } finally {
-          document.body.removeChild(lineSpan);
-        }
-      } else {
-        const span = document.createElement("span");
-        span.style.position = "fixed";
-        span.style.visibility = "hidden";
-        span.style.whiteSpace = "pre";
-        span.style.fontSize = computed.fontSize;
-        span.style.fontFamily = computed.fontFamily;
-        span.style.fontWeight = computed.fontWeight;
-        span.style.fontStyle = computed.fontStyle;
-        span.style.letterSpacing = computed.letterSpacing;
-        span.textContent = textBeforeCursor;
-        document.body.appendChild(span);
-        try {
-          const spanRect = span.getBoundingClientRect();
-          const paddingLeft = parseFloat(computed.paddingLeft) || 0;
-          const paddingTop = parseFloat(computed.paddingTop) || 0;
-          const lineHeight = parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) || 16;
-          const inputHeight = inputRect.height;
-          const verticalCenter = (inputHeight - lineHeight) / 2;
-          return new DOMRect(
-            inputRect.left + paddingLeft + spanRect.width,
-            inputRect.top + paddingTop + verticalCenter,
-            0,
-            lineHeight
-          );
-        } finally {
-          document.body.removeChild(span);
-        }
-      }
-    }
-    /**
-     * Update the overlay content (text + suggestion)
-     * Override this in subclasses for different display styles
-     */
-    updateContent(text, suggestion) {
-      const suggestionClass = this.options.suggestionClass || "autocomplete-suggestion";
-      if (suggestion) {
-        suggestion = suggestion?.replaceAll("\b", "");
-        this.overlay.innerHTML = `
-        <span style="color: transparent; white-space: pre;">${this.escapeHtml(text)}</span><span class="${suggestionClass}">${this.escapeHtml(suggestion)}</span>
-      `;
-      } else {
-        this.overlay.innerHTML = `<span style="color: transparent; white-space: pre;">${this.escapeHtml(text)}</span>`;
-      }
-    }
-    /**
-     * Escape HTML to prevent XSS
-     */
-    escapeHtml(text) {
-      const div = document.createElement("div");
-      div.textContent = text;
-      return div.innerHTML;
-    }
-    /**
      * Cleanup and remove the overlay
      */
     destroy() {
-      this.restoreBorderStyles();
       if (this.shadowOverlay) {
         this.shadowOverlay.style.visibility = "hidden";
         this.shadowOverlay.textContent = "";
       }
-      if (this.overlay.parentNode) {
-        this.overlay.parentNode.removeChild(this.overlay);
-      }
-      if (this.wrapper.parentElement) {
-        this.wrapper.parentElement.insertBefore(this.inputElement, this.wrapper);
-        this.wrapper.remove();
-      }
-    }
-    /**
-     * Get the wrapper element
-     */
-    getWrapper() {
-      return this.wrapper;
-    }
-    /**
-     * Get the overlay element
-     */
-    getOverlay() {
-      return this.overlay;
     }
   };
-
-  // src/attachment/overlay/styles.ts
-  function getDefaultStyles(customStyles) {
-    return `
-    .autocomplete-wrapper {
-      position: relative;
-      display: inline-block;
-      width: 100%;
-    }
-    
-    .autocomplete-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      pointer-events: none;
-      white-space: nowrap;
-      word-wrap: normal;
-      overflow: hidden;
-      z-index: 999999;
-    }
-    
-    .autocomplete-wrapper textarea + .autocomplete-overlay,
-    .autocomplete-wrapper [contenteditable="true"] + .autocomplete-overlay {
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-    
-    .autocomplete-suggestion {
-      color: #999;
-    }
-    
-    .autocomplete-wrapper input,
-    .autocomplete-wrapper textarea,
-    .autocomplete-wrapper [contenteditable="true"] {
-      position: relative;
-      z-index: 1000000;
-      /* Don't set background: transparent - preserve original background */
-    }
-    
-    ${customStyles || ""}
-  `;
-  }
-  function injectStyles(customStyles) {
-    if (!document.getElementById("autocomplete-styles")) {
-      const styleSheet = document.createElement("style");
-      styleSheet.id = "autocomplete-styles";
-      styleSheet.textContent = getDefaultStyles(customStyles);
-      document.head.appendChild(styleSheet);
-    }
-  }
 
   // src/attachment/textManipulation/BackspaceProcessor.ts
   var BACKSPACE3 = "\b";
@@ -2642,12 +2470,6 @@ ${newWords.join("\n")}`;
       return () => {
       };
     }
-    const {
-      wrapperClass = DEFAULT_ATTACHMENT_OPTIONS.wrapperClass,
-      overlayClass = DEFAULT_ATTACHMENT_OPTIONS.overlayClass,
-      suggestionClass = DEFAULT_ATTACHMENT_OPTIONS.suggestionClass,
-      customStyles
-    } = options || {};
     const attachedInputDescendant = el.querySelector('input[data-automobile-complete-attached], textarea[data-automobile-complete-attached], [contenteditable="true"][data-automobile-complete-attached]');
     if (attachedInputDescendant) {
       return () => {
@@ -2670,15 +2492,11 @@ ${newWords.join("\n")}`;
     globalAttachedElements.set(el, PLACEHOLDER_CLEANUP);
     console.info("[Automobile Complete] Attaching autocomplete to element:", el);
     try {
-      const overlay = new CompletionOverlay(el, controller, {
-        ...options,
-        wrapperClass,
-        overlayClass,
-        suggestionClass
-      });
+      const overlay = new CompletionOverlay(el, controller);
       const ref = { current: el };
       controller.setInputRef(ref);
-      injectStyles(customStyles);
+      const originalCaretColor = el.style.caretColor;
+      el.style.caretColor = "green";
       const updateOverlayFromElement = () => {
         const currentText = textManipulator.getText(el);
         controller.handleTextChange(currentText);
@@ -2712,6 +2530,11 @@ ${newWords.join("\n")}`;
         el.removeEventListener("keydown", handleKeyDown, true);
         el.removeEventListener("input", handleInput, false);
         el.removeAttribute("data-automobile-complete-attached");
+        if (originalCaretColor) {
+          el.style.caretColor = originalCaretColor;
+        } else {
+          el.style.removeProperty("caret-color");
+        }
         attachingElements.delete(el);
         globalAttachedElements.delete(el);
         overlay.destroy();

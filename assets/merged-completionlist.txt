@@ -388,7 +388,6 @@ seni|or #83176
 spri|ng #83176
 sund|ay #83176
 telli|ng #83176
-competit|ion #81284
 activit|ies #81283
 addr|ess #81283
 analy|sis #81283
@@ -397,6 +396,7 @@ boug|ht #81283
 choo|se #81283
 christm|as #81283
 commis|sion #81283
+competit|ion #81283
 easi|ly #81283
 nece|ssary #81283
 resou|rces #81283
@@ -3919,7 +3919,6 @@ ultras|ound #3236
 ush|er #3236
 vasc|ular #3236
 watk|ins #3236
-javas|cript #3163
 adjoi|ning #3162
 arresti|ng #3162
 barten|der #3162
@@ -3945,6 +3944,7 @@ hyder|abad #3162
 inexper|ienced #3162
 invadi|ng #3162
 jackp|ot #3162
+javas|cript #3162
 kanga|roo #3162
 kua|la #3162
 liberali|sm #3162
@@ -59663,80 +59663,3 @@ zaxx|on #10
 zeeru|st #10
 zuor|en #10
 zwelin|zima #10
-reac|t native #1
-py|thon #1
-ja|va #1
-types|cript #1
-flu|tter #1
-dev|elopment #1
-dev en|vironment #1
-development e|nvironment #1
-pro|duction #1
-freem|ium #1
-node|.js #1
-fasta|pi #1
-jsons|chema #1
-busi|ness #1
-business i|dea #1
-business v|enture #1
-software dev|elopment #1
-software dep|loyment #1
-docker c|ontainer #1
-docker i|mage #1
-dev s|erver #1
-software e|ngineer #1
-app s|tore #1
-build p|rocess #1
-startup i|dea #1
-sk|unkpad #1
-skunkpad is r|eally cool #1
-peanut b|utter #1
-peanut butter s|andwich #1
-peanut butter a|nd jelly #1
-peanut butter and jelly s|andwich #1
-ham a|nd cheese #1
-target a|udience #1
-qr c|ode #1
-com|petitors #1
-fre|quent #1
-frequently a|sked questions #1
-public d|atabase #1
-large l|anguage model #1
-arti|ficial intelligence #1
-chatg|pt #1
-real e|state #1
-full s|tack #1
-social n|etwork #1
-shipping a|ddress #1
-publicly a|ccessible #1
-user in|terface #1
-user ex|perience #1
-cloud se|rver #1
-cloud co|mputing #1
-neural n|etwork #1
-api e|ndpoint #1
-continuous in|tegration #1
-automated t|esting #1
-package ma|nager #1
-design pa|tterns #1
-bug tr|acking #1
-bug re|porting #1
-code re|view #1
-pull re|quest #1
-database mi|gration #1
-request ro|uting #1
-anim|als #1
-enor|mous #1
-for e|xample: #1
-gir|affes #1
-giraffes a|re super tall #1
-hip|po #1
-hippo|potamuses #1
-hippos a|re fat #1
-hippopotamuses a|re fat #1
-testing1|23 #1
-abcd|efghijklmnopqrstuvwxyz #1
-12|345 #1
-3.141|59265358979323846264338327950288419716939937510 #1
-lk|https://www.linkedin.com/in/torin-halsted/ #1
-grey|gray #1
