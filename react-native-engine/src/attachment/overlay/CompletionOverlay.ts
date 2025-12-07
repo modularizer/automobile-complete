@@ -23,6 +23,8 @@ export class CompletionOverlay {
   protected inputElement: HTMLElement;
   protected controller: AutocompleteTextController;
   protected options: AttachAutocompleteOptions;
+  private shadowHost: HTMLElement | null = null;
+  private shadowOverlay: HTMLElement | null = null;
   private borderWasApplied: boolean = false;
   private originalBorder: string = '';
   private originalBorderWidth: string = '';
@@ -51,9 +53,12 @@ export class CompletionOverlay {
     this.wrapper = document.createElement('div');
     this.wrapper.className = options.wrapperClass || 'autocomplete-wrapper';
 
-    // Create overlay
+    // Create overlay (kept for compatibility, but we'll use shadow DOM)
     this.overlay = document.createElement('div');
     this.overlay.className = options.overlayClass || 'autocomplete-overlay';
+    
+    // Create Shadow DOM overlay - isolated from page CSS
+    this.createShadowOverlay();
 
     // Insert wrapper before input
     const parent = inputElement.parentElement;
@@ -63,10 +68,61 @@ export class CompletionOverlay {
 
     parent.insertBefore(this.wrapper, inputElement);
     this.wrapper.appendChild(inputElement);
-    this.wrapper.appendChild(this.overlay);
+    // Don't append overlay to wrapper - it's in document.body
 
     // Apply debug border if appropriate
     this.applyDebugBorder();
+  }
+
+  /**
+   * Create isolated Shadow DOM overlay that can't be affected by page CSS
+   */
+  private createShadowOverlay(): void {
+    // Check if shadow host already exists (shared across all instances)
+    let host = document.getElementById('__automobile-caret-overlay-host') as HTMLElement;
+    
+    if (!host) {
+      // Create root host
+      host = document.createElement('div');
+      host.id = '__automobile-caret-overlay-host';
+      Object.assign(host.style, {
+        position: 'fixed',
+        inset: '0',
+        pointerEvents: 'none',
+        zIndex: '2147483647',
+      });
+      document.documentElement.appendChild(host);
+      
+      // Create Shadow DOM so page CSS can't mess with it
+      const shadow = host.attachShadow({ mode: 'open' });
+      
+      // Overlay element that will follow the caret
+      const caretOverlay = document.createElement('div');
+      Object.assign(caretOverlay.style, {
+        position: 'fixed',
+        left: '0px',
+        top: '0px',
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '12px',
+        color: '#999',
+        pointerEvents: 'none',
+        whiteSpace: 'pre',
+        visibility: 'hidden',
+      });
+      caretOverlay.textContent = '';
+      
+      shadow.appendChild(caretOverlay);
+      
+      this.shadowHost = host;
+      this.shadowOverlay = caretOverlay;
+    } else {
+      // Reuse existing shadow host
+      this.shadowHost = host;
+      const shadow = host.shadowRoot;
+      if (shadow) {
+        this.shadowOverlay = shadow.firstElementChild as HTMLElement;
+      }
+    }
   }
 
   /**
@@ -225,8 +281,8 @@ export class CompletionOverlay {
     // Match input's computed styles exactly
     this.syncStyles();
 
-    // Update content
-    this.updateContent(text, suggestion);
+    // COMPLETELY NEW OVERLAY SYSTEM: Use CSS custom properties and native cursor position
+    this.updateOverlayCompletely(text, suggestion);
   }
 
   /**
@@ -269,6 +325,282 @@ export class CompletionOverlay {
   }
 
   /**
+   * BACK TO BASICS: Use the original simple approach that actually worked
+   */
+  private updateOverlayCompletely(text: string, suggestion: string | null): void {
+    if (!this.shadowOverlay) {
+      return;
+    }
+    
+    if (!suggestion) {
+      this.shadowOverlay.style.visibility = 'hidden';
+      this.shadowOverlay.textContent = '';
+      return;
+    }
+    
+    const cleanSuggestion = suggestion.replaceAll("\b", "");
+    
+    // Get cursor position using unified caret tracker
+    const cursorPos = this.getUnifiedCaretPosition();
+    
+    if (!cursorPos) {
+      this.shadowOverlay.style.visibility = 'hidden';
+      this.shadowOverlay.textContent = '';
+      return;
+    }
+    
+    // Update shadow overlay position and content
+    this.shadowOverlay.style.left = `${cursorPos.left}px`;
+    this.shadowOverlay.style.top = `${cursorPos.top - 2}px`;
+    this.shadowOverlay.textContent = cleanSuggestion;
+    this.shadowOverlay.style.visibility = 'visible';
+    
+    // Match input font styles
+    const inputStyles = window.getComputedStyle(this.inputElement);
+    this.shadowOverlay.style.fontSize = inputStyles.fontSize;
+    this.shadowOverlay.style.fontFamily = inputStyles.fontFamily;
+    this.shadowOverlay.style.fontWeight = inputStyles.fontWeight;
+    this.shadowOverlay.style.fontStyle = inputStyles.fontStyle;
+    this.shadowOverlay.style.lineHeight = inputStyles.lineHeight;
+    this.shadowOverlay.style.letterSpacing = inputStyles.letterSpacing;
+  }
+
+  /**
+   * Unified caret tracker - works for both input/textarea and contenteditable
+   */
+  private getUnifiedCaretPosition(): { left: number; top: number } | null {
+    // For contenteditable: use Range.getBoundingClientRect() - most reliable
+    if (this.inputElement.contentEditable === 'true' || this.inputElement.isContentEditable) {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        try {
+          const range = selection.getRangeAt(0);
+          if (this.inputElement.contains(range.commonAncestorContainer)) {
+            const collapsedRange = range.cloneRange();
+            collapsedRange.collapse(true);
+            const rect = collapsedRange.getBoundingClientRect();
+            return { left: rect.left, top: rect.top };
+          }
+        } catch (e) {
+          return null;
+        }
+      }
+      return null;
+    }
+    
+    // For input/textarea: mirror text in hidden clone and get rects
+    const input = this.inputElement as HTMLInputElement | HTMLTextAreaElement;
+    const selectionStart = input.selectionStart;
+    if (selectionStart === null) return null;
+    
+    return this.getInputCaretPosition(input, selectionStart);
+  }
+
+  /**
+   * Get caret position for input/textarea by mirroring in hidden clone
+   */
+  private getInputCaretPosition(input: HTMLInputElement | HTMLTextAreaElement, selectionStart: number): { left: number; top: number } | null {
+    const computed = window.getComputedStyle(input);
+    const inputRect = input.getBoundingClientRect();
+    const textBeforeCursor = input.value.substring(0, selectionStart);
+    
+    // Create hidden mirror element
+    const mirror = document.createElement(input.tagName.toLowerCase()) as HTMLInputElement | HTMLTextAreaElement;
+    Object.assign(mirror.style, {
+      position: 'fixed',
+      visibility: 'hidden',
+      pointerEvents: 'none',
+      whiteSpace: input.tagName === 'TEXTAREA' ? 'pre-wrap' : 'nowrap',
+      overflow: 'hidden',
+    });
+    
+    // Copy all relevant styles
+    mirror.style.fontSize = computed.fontSize;
+    mirror.style.fontFamily = computed.fontFamily;
+    mirror.style.fontWeight = computed.fontWeight;
+    mirror.style.fontStyle = computed.fontStyle;
+    mirror.style.letterSpacing = computed.letterSpacing;
+    mirror.style.padding = computed.padding;
+    mirror.style.border = computed.border;
+    mirror.style.boxSizing = computed.boxSizing;
+    mirror.style.width = computed.width;
+    mirror.style.height = computed.height;
+    mirror.style.textAlign = computed.textAlign;
+    mirror.style.lineHeight = computed.lineHeight;
+    
+    mirror.value = input.value;
+    mirror.setSelectionRange(selectionStart, selectionStart);
+    
+    document.body.appendChild(mirror);
+    
+    try {
+      if (input.tagName === 'TEXTAREA') {
+        // For textarea, calculate line position
+        const lines = textBeforeCursor.split('\n');
+        const lineIndex = lines.length - 1;
+        const lineText = lines[lineIndex] || '';
+        
+        // Measure current line
+        const lineSpan = document.createElement('span');
+        lineSpan.style.position = 'fixed';
+        lineSpan.style.visibility = 'hidden';
+        lineSpan.style.whiteSpace = 'pre';
+        lineSpan.style.fontSize = computed.fontSize;
+        lineSpan.style.fontFamily = computed.fontFamily;
+        lineSpan.style.fontWeight = computed.fontWeight;
+        lineSpan.style.fontStyle = computed.fontStyle;
+        lineSpan.style.letterSpacing = computed.letterSpacing;
+        lineSpan.textContent = lineText;
+        document.body.appendChild(lineSpan);
+        
+        try {
+          const lineRect = lineSpan.getBoundingClientRect();
+          const paddingLeft = parseFloat(computed.paddingLeft) || 0;
+          const paddingTop = parseFloat(computed.paddingTop) || 0;
+          const lineHeight = parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) || 16;
+          
+          return {
+            left: inputRect.left + paddingLeft + lineRect.width,
+            top: inputRect.top + paddingTop + (lineHeight * lineIndex)
+          };
+        } finally {
+          document.body.removeChild(lineSpan);
+        }
+      } else {
+        // Single line input
+        const span = document.createElement('span');
+        span.style.position = 'fixed';
+        span.style.visibility = 'hidden';
+        span.style.whiteSpace = 'pre';
+        span.style.fontSize = computed.fontSize;
+        span.style.fontFamily = computed.fontFamily;
+        span.style.fontWeight = computed.fontWeight;
+        span.style.fontStyle = computed.fontStyle;
+        span.style.letterSpacing = computed.letterSpacing;
+        span.textContent = textBeforeCursor;
+        document.body.appendChild(span);
+        
+        try {
+          const spanRect = span.getBoundingClientRect();
+          const paddingLeft = parseFloat(computed.paddingLeft) || 0;
+          const paddingTop = parseFloat(computed.paddingTop) || 0;
+          const lineHeight = parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) || 16;
+          const inputHeight = inputRect.height;
+          const verticalCenter = (inputHeight - lineHeight) / 2;
+          
+          return {
+            left: inputRect.left + paddingLeft + spanRect.width,
+            top: inputRect.top + paddingTop + verticalCenter
+          };
+        } finally {
+          document.body.removeChild(span);
+        }
+      }
+    } finally {
+      document.body.removeChild(mirror);
+    }
+  }
+
+  /**
+   * Get cursor position rectangle using native browser APIs
+   */
+  private getNativeCursorRect(): DOMRect | null {
+    // For contenteditable: use Range API - most reliable
+    if (this.inputElement.contentEditable === 'true' || this.inputElement.isContentEditable) {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        try {
+          const range = selection.getRangeAt(0);
+          if (this.inputElement.contains(range.commonAncestorContainer)) {
+            const collapsedRange = range.cloneRange();
+            collapsedRange.collapse(true);
+            return collapsedRange.getBoundingClientRect();
+          }
+        } catch (e) {
+          return null;
+        }
+      }
+      return null;
+    }
+    
+    // For input/textarea: measure using temporary elements
+    const input = this.inputElement as HTMLInputElement | HTMLTextAreaElement;
+    const selectionStart = input.selectionStart;
+    if (selectionStart === null) return null;
+    
+    const computed = window.getComputedStyle(this.inputElement);
+    const inputRect = input.getBoundingClientRect();
+    const textBeforeCursor = input.value.substring(0, selectionStart);
+    
+    if (input.tagName === 'TEXTAREA') {
+      // Handle multiline
+      const lines = textBeforeCursor.split('\n');
+      const lineIndex = lines.length - 1;
+      const lineText = lines[lineIndex] || '';
+      
+      const lineSpan = document.createElement('span');
+      lineSpan.style.position = 'fixed';
+      lineSpan.style.visibility = 'hidden';
+      lineSpan.style.whiteSpace = 'pre';
+      lineSpan.style.fontSize = computed.fontSize;
+      lineSpan.style.fontFamily = computed.fontFamily;
+      lineSpan.style.fontWeight = computed.fontWeight;
+      lineSpan.style.fontStyle = computed.fontStyle;
+      lineSpan.style.letterSpacing = computed.letterSpacing;
+      lineSpan.textContent = lineText;
+      document.body.appendChild(lineSpan);
+      
+      try {
+        const lineRect = lineSpan.getBoundingClientRect();
+        const paddingLeft = parseFloat(computed.paddingLeft) || 0;
+        const paddingTop = parseFloat(computed.paddingTop) || 0;
+        const lineHeight = parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) || 16;
+        
+        return new DOMRect(
+          inputRect.left + paddingLeft + lineRect.width,
+          inputRect.top + paddingTop + (lineHeight * lineIndex),
+          0,
+          lineHeight
+        );
+      } finally {
+        document.body.removeChild(lineSpan);
+      }
+    } else {
+      // Single line input
+      const span = document.createElement('span');
+      span.style.position = 'fixed';
+      span.style.visibility = 'hidden';
+      span.style.whiteSpace = 'pre';
+      span.style.fontSize = computed.fontSize;
+      span.style.fontFamily = computed.fontFamily;
+      span.style.fontWeight = computed.fontWeight;
+      span.style.fontStyle = computed.fontStyle;
+      span.style.letterSpacing = computed.letterSpacing;
+      span.textContent = textBeforeCursor;
+      document.body.appendChild(span);
+      
+      try {
+        const spanRect = span.getBoundingClientRect();
+        const paddingLeft = parseFloat(computed.paddingLeft) || 0;
+        const paddingTop = parseFloat(computed.paddingTop) || 0;
+        const lineHeight = parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) || 16;
+        const inputHeight = inputRect.height;
+        const verticalCenter = (inputHeight - lineHeight) / 2;
+        
+        return new DOMRect(
+          inputRect.left + paddingLeft + spanRect.width,
+          inputRect.top + paddingTop + verticalCenter,
+          0,
+          lineHeight
+        );
+      } finally {
+        document.body.removeChild(span);
+      }
+    }
+  }
+
+
+  /**
    * Update the overlay content (text + suggestion)
    * Override this in subclasses for different display styles
    */
@@ -287,6 +619,7 @@ export class CompletionOverlay {
     }
   }
 
+
   /**
    * Escape HTML to prevent XSS
    */
@@ -302,6 +635,17 @@ export class CompletionOverlay {
   destroy(): void {
     // Restore border styles
     this.restoreBorderStyles();
+    
+    // Hide shadow overlay (but don't remove host - it's shared)
+    if (this.shadowOverlay) {
+      this.shadowOverlay.style.visibility = 'hidden';
+      this.shadowOverlay.textContent = '';
+    }
+    
+    // Remove old overlay if it exists
+    if (this.overlay.parentNode) {
+      this.overlay.parentNode.removeChild(this.overlay);
+    }
     
     // Restore original structure
     if (this.wrapper.parentElement) {

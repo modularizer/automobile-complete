@@ -23,7 +23,7 @@ export function getDefaultStyles(customStyles?: string): string {
       white-space: nowrap;
       word-wrap: normal;
       overflow: hidden;
-      z-index: 1;
+      z-index: 999999;
     }
     
     .autocomplete-wrapper textarea + .autocomplete-overlay,
@@ -40,7 +40,7 @@ export function getDefaultStyles(customStyles?: string): string {
     .autocomplete-wrapper textarea,
     .autocomplete-wrapper [contenteditable="true"] {
       position: relative;
-      z-index: 2;
+      z-index: 1000000;
       /* Don't set background: transparent - preserve original background */
     }
     
