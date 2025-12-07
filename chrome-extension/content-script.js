@@ -244,13 +244,23 @@
     }
   }
 
-  // Listen for messages from popup to reload autocomplete
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'reloadAutocomplete') {
-      // Reload the page to reinitialize
+  // Listen for storage changes to reload autocomplete when settings change
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local') {
+      // Reload the page to reinitialize with new settings
       location.reload();
-      sendResponse({ success: true });
     }
-    return true;
+  });
+
+  // Listen for messages from popup to get current URL (no permissions needed)
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'getCurrentUrl') {
+      sendResponse({ 
+        url: window.location.href,
+        hostname: window.location.hostname
+      });
+      return true; // Keep channel open for async response
+    }
+    return false;
   });
 })();

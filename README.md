@@ -13,8 +13,8 @@ giraffes a|re super tall
 ```
 4. run!
 
-Currently available in Python, but I plan to add support for other languages soon. The pre-parsing with remain in Python, but the engine and ui will soon work in other languages (working from a completions list).
-See [TODO.md](TODO.md)
+Currently available in Python, Typescript/Javascript/React Native/React Native Web.
+Best used as a Chrome Extension.
 
 ## Quick Start
 
@@ -27,15 +27,28 @@ cd automobile-complete
 
 # Install in editable mode
 pip install -e .
+
+# Setup react-native/js/chrome-extension
+cd react-native-engine
+npm install
+npm run build
 ```
 
 ### Basic Usage
-
-**Just run it:**
+**Try it in the command line!:**
 ```bash
 amc
 ```
 
+**Try it in the browser!:**
+I will publish to Chrome Web Store soon, in the meantime...
+
+1. Go to chrome://extensions
+2. Enable Developer mode
+3. Load Unpacked `chrome-extension` folder
+4. go to your favorite webpage and start typing
+
+### How to use
 The project ships with pre-generated wordlists and completion lists, so you can start using autocomplete immediately!
 
 - Type to see inline gray text completions
@@ -43,6 +56,8 @@ The project ships with pre-generated wordlists and completion lists, so you can 
 - Press **Backspace** to delete characters
 - Works with piped output (writes final result to stdout when piped)
 
+
+### How to customize
 **Only run setup if you've customized something:**
 ```bash
 amc setup

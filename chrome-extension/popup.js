@@ -107,13 +107,23 @@ function updatePatternHighlighting(textareaId, currentUrl) {
 let currentTabUrl = '';
 let currentHostname = '';
 
-chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-  const currentTab = tabs[0];
-  if (currentTab && currentTab.url) {
+// Get URL from content script via messaging (no permissions needed)
+chrome.runtime.sendMessage({ action: 'getCurrentUrl' }, (response) => {
+  if (chrome.runtime.lastError) {
+    // Content script might not be loaded (e.g., chrome:// pages)
+    console.warn('Could not get URL from content script:', chrome.runtime.lastError.message);
+    const currentSiteLabel = document.getElementById('currentSiteLabel');
+    if (currentSiteLabel) {
+      currentSiteLabel.textContent = 'Unable to detect site';
+    }
+    return;
+  }
+  
+  if (response && response.url) {
     try {
-      const url = new URL(currentTab.url);
-      currentHostname = url.hostname;
-      currentTabUrl = url.href;
+      const url = new URL(response.url);
+      currentHostname = response.hostname || url.hostname;
+      currentTabUrl = response.url;
       
       // Check if extension can run on this page
       const isRestrictedPage = currentTabUrl.startsWith('chrome://') || 
@@ -451,12 +461,8 @@ document.getElementById('save').addEventListener('click', () => {
       whitelist: whitelist,
       blacklist: blacklist
     }, () => {
-      showStatus('Settings saved! Reload the page to apply.', 'success');
-      
-      // Notify content script to reload
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        chrome.tabs.sendMessage(tabs[0].id, { action: 'reloadAutocomplete' });
-      });
+      showStatus('Settings saved! Page will reload automatically.', 'success');
+      // Content script will automatically reload via storage.onChanged listener
     });
   });
 });
