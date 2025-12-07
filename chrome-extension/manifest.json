@@ -4,13 +4,23 @@
   "version": "1.0.0",
   "description": "Universal autocomplete for any input field",
   "permissions": [
-    "storage",
-    "scripting",
-    "webNavigation"
+    "storage"
   ],
-  "background": {
-    "service_worker": "service-worker.js"
-  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "baked-completions.js",
+        "automobile-complete.js",
+        "content-script.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false,
+      "match_about_blank": false
+    }
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_title": "Automobile Complete"
