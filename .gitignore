@@ -1,6 +1,7 @@
 # IDE
 .idea
 .vscode
+.zip
 
 # Python
 __pycache__/
