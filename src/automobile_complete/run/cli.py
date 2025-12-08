@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 Simple interactive autocomplete demo using only builtins.
 
@@ -21,9 +23,8 @@ from typing import Literal, Any
 
 from automobile_complete.engine import Trie
 from automobile_complete.utils.env import env
-from automobile_complete.utils.terminal.chars import ESC, CARRIAGE_RETURN, CTRL, TAB, BACKSPACE
+from automobile_complete.utils.terminal.chars import ESC, CARRIAGE_RETURN, CTRL, TAB
 from automobile_complete.utils.terminal.terminal import print_with_suggestion
-from automobile_complete.utils.terminal.colors import GRAY, RESET
 
 
 def get_char():
@@ -72,7 +73,9 @@ def interactive_demo(trie: Trie,
                      placeholder: str = "Start typing to test the auto-complete...",
                      print = print,
                      get_char = get_char,
-                     prompt: str = ""
+                     prompt: str = "",
+                     multiline: bool = False,
+                     append_newline: bool = True
                      ):
     """
     Run an interactive autocomplete demo.
@@ -86,6 +89,9 @@ def interactive_demo(trie: Trie,
     Args:
         trie: Optional Trie to use. If None, creates a demo trie.
     """
+    placeholder = placeholder or ""
+    prompt = prompt or ""
+
     # Detect if stdout is being piped
     is_piped = not sys.stdout.isatty()
     display_stream_opened = False
@@ -154,33 +160,46 @@ def interactive_demo(trie: Trie,
 
 
             # Handle special characters
-            if (ch in [CTRL.C, CTRL.D, CTRL.X, CTRL.Q, CTRL["["]]) or ((ch == CARRIAGE_RETURN or ch == '\n') and not current_node.esc):  # Ctrl+D (EOF)
-                current_node.full_text += "\n"
-                full_text += "\n"
+            if (ch in [CTRL.D, CTRL.X, CTRL.Q, CTRL["["]]) or ((ch == CARRIAGE_RETURN or ch == '\n') and not multiline):  # Ctrl+D (EOF)
+                if append_newline:
+                    current_node.full_text += "\n"
+                    full_text += "\n"
                 print_with_suggestion(prompt + full_text, "", file=display_stream, print = print)
                 log("\n\nExiting...")
                 break
+            elif ch in [CTRL.C]:
+                def _silent_kb_interrupt(*args):
+                    # suppress traceback entirely
+                    print("KeyboardInterrupt")
+
+                old_hook = sys.excepthook
+                sys.excepthook = _silent_kb_interrupt
+                print_with_suggestion("", "", file=display_stream, print = print)
+                try:
+                    raise KeyboardInterrupt()
+                finally:
+                    sys.excepthook = old_hook
             elif ch == TAB:  # Tab - accept completion
                 if completion and not current_node.esc:
                     # Accept the completion
                     current_node = current_node.accept()
                 else:
                     current_node = current_node.walk_to("    ")
-            elif (ch == CARRIAGE_RETURN or ch == '\n') and current_node.esc:
+            elif (ch == CARRIAGE_RETURN or ch == '\n') and multiline:
                 current_node = current_node.walk_to("\n")
             else: # regular character
                 current_node = current_node.walk_to(ch)
-    except KeyboardInterrupt:
-        log("\n\nExiting...")
-    except BrokenPipeError:
-        log("\n\nBroken Pipe")
-    except Exception as e:
-        import traceback
-        log(f"\n\nError: {e}\n{str(traceback.format_exc())}")
+    # except KeyboardInterrupt:
+    #     log("\n\nExiting...")
+    # except BrokenPipeError:
+    #     log("\n\nBroken Pipe")
+    # except Exception as e:
+    #     import traceback
+    #     log(f"\n\nError: {e}\n{str(traceback.format_exc())}")
     finally:
         # Write final result to stdout (only when piped, otherwise it's already there)
         final_text = current_node.full_text or ""
-        if not final_text.endswith("\n"):
+        if append_newline and not final_text.endswith("\n"):
             final_text += "\n"
         if is_piped:
             with contextlib.suppress(BrokenPipeError):
@@ -212,6 +231,8 @@ def run_input(
         noisy: bool | None = None,
         placeholder: str | None = None,
         print = print,
+        multiline: bool = False,
+        append_newline: bool = True
 ):
     if noisy is None:
         noisy = env.get_as("AMC_RUN_NOISY", bool, False)
@@ -224,7 +245,6 @@ def run_input(
     # Re-check defaults (env object already loaded everything)
     default_completion_file = env.get_as("AMC_SRC", "path_str")
     completion_files = completion_files if completion_files is not None else ([default_completion_file] if default_completion_file else [])
-
     # Detect if stdout is being piped
     is_piped = not sys.stdout.isatty()
     # When piped, send noisy messages to stderr
@@ -246,7 +266,7 @@ def run_input(
     t1 = time.perf_counter()
     if noisy:
         print(f"Loaded trie with {len(trie.root.words)} words in {(t1 - t0):.3f}s\n", file=noisy_stream)
-    return interactive_demo(trie, noisy=noisy, placeholder=placeholder, prompt=prompt)
+    return interactive_demo(trie, noisy=noisy, placeholder=placeholder, prompt=prompt, multiline=multiline, append_newline=append_newline)
 
 
 def main():
@@ -318,13 +338,19 @@ Examples:
         default=[default_completion_file] if default_completion_file else [],
         help=f"One or more completion files to load (pre|post #freq format). Default from .env.sample: {default_completion_file or '(not set)'}"
     )
+    parser.add_argument(
+        "-m", "--multiline",
+        action="store_true",
+        default=False,
+        help=f"Accept multiple lines of input (use CTRL+D to input)"
+    )
     
     parser.add_argument(
         "-n", "--noisy",
         action="store_true",
         help=f"Enable verbose output (show loading messages, etc.). Default from .env.sample: {env.get_as('AMC_RUN_NOISY', bool, False) or 'false'}"
     )
-    default_placeholder = env.get_as("AMC_RUN_PLACEHOLDER", str, "Start typing to test the auto-complete...")
+    default_placeholder = env.get_as("AMC_RUN_PLACEHOLDER", str, "")
     parser.add_argument(
         "--placeholder",
         type=str,
@@ -345,12 +371,15 @@ Examples:
         default=None,
         help="Path to .env file to load (overrides .env.sample). Default: .env in project root"
     )
+
+    parser.add_argument(
+        "-nn", "--no-newline",
+        default=False,
+        action="store_true",
+        help="Do not append a newline to the end of the text"
+    )
     
     args = parser.parse_args()
-    
-    # Use prompt as placeholder if no explicit placeholder and prompt is provided
-    if args.placeholder == default_placeholder and args.prompt:
-        args.placeholder = args.prompt
     
     # Convert semicolon-separated completions to newline-separated
     completions = args.completions.replace(";", "\n") if args.completions else ""
@@ -360,7 +389,9 @@ Examples:
         noisy=args.noisy,
         placeholder=args.placeholder,
         completions=completions,
-        completion_files=args.completion_files if args.completion_files else None
+        completion_files=args.completion_files if args.completion_files else None,
+        multiline=args.multiline,
+        append_newline= not args.no_newline
     )
 
 

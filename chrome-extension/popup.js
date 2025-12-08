@@ -107,11 +107,10 @@ function updatePatternHighlighting(textareaId, currentUrl) {
 let currentTabUrl = '';
 let currentHostname = '';
 
-// Get URL from content script via messaging (no permissions needed)
-chrome.runtime.sendMessage({ action: 'getCurrentUrl' }, (response) => {
+// Get URL directly from the active tab
+chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
   if (chrome.runtime.lastError) {
-    // Content script might not be loaded (e.g., chrome:// pages)
-    console.warn('Could not get URL from content script:', chrome.runtime.lastError.message);
+    console.error('Error getting active tab:', chrome.runtime.lastError.message);
     const currentSiteLabel = document.getElementById('currentSiteLabel');
     if (currentSiteLabel) {
       currentSiteLabel.textContent = 'Unable to detect site';
@@ -119,34 +118,90 @@ chrome.runtime.sendMessage({ action: 'getCurrentUrl' }, (response) => {
     return;
   }
   
-  if (response && response.url) {
-    try {
-      const url = new URL(response.url);
-      currentHostname = response.hostname || url.hostname;
-      currentTabUrl = response.url;
-      
-      // Check if extension can run on this page
-      const isRestrictedPage = currentTabUrl.startsWith('chrome://') || 
-                               currentTabUrl.startsWith('chrome-extension://') || 
-                               currentTabUrl.startsWith('moz-extension://') ||
-                               currentTabUrl.startsWith('about:');
-      
-      const siteToggleContainer = document.getElementById('siteToggleContainer');
-      const restrictedPageMessage = document.getElementById('restrictedPageMessage');
-      
-      if (isRestrictedPage) {
-        // Hide site toggle, show message
-        siteToggleContainer.style.display = 'none';
-        restrictedPageMessage.style.display = 'block';
-      } else {
-        // Show site toggle, hide message
-        siteToggleContainer.style.display = 'flex';
-        restrictedPageMessage.style.display = 'none';
-      }
+  if (!tabs || tabs.length === 0) {
+    console.error('No active tab found');
+    const currentSiteLabel = document.getElementById('currentSiteLabel');
+    if (currentSiteLabel) {
+      currentSiteLabel.textContent = 'Unable to detect site';
+    }
+    return;
+  }
+  
+  const currentTab = tabs[0];
+  console.log('Current tab:', currentTab);
+  
+  // Check if tab has a URL (might be undefined for some pages)
+  if (!currentTab.url) {
+    console.warn('Tab URL is undefined:', currentTab);
+    const currentSiteLabel = document.getElementById('currentSiteLabel');
+    if (currentSiteLabel) {
+      currentSiteLabel.textContent = 'Unable to detect site';
+    }
+    return;
+  }
+  
+  // Check if it's a restricted page (chrome://, etc.)
+  if (currentTab.url.startsWith('chrome://') || 
+      currentTab.url.startsWith('chrome-extension://') || 
+      currentTab.url.startsWith('moz-extension://') ||
+      currentTab.url.startsWith('about:')) {
+    const currentSiteLabel = document.getElementById('currentSiteLabel');
+    const siteToggleContainer = document.getElementById('siteToggleContainer');
+    const restrictedPageMessage = document.getElementById('restrictedPageMessage');
+    
+    if (currentSiteLabel) {
+      currentSiteLabel.textContent = 'Unable to detect site';
+    }
+    if (siteToggleContainer) {
+      siteToggleContainer.style.display = 'none';
+    }
+    if (restrictedPageMessage) {
+      restrictedPageMessage.style.display = 'block';
+    }
+    return;
+  }
+  
+  // Use the tab URL directly
+  try {
+    const url = new URL(currentTab.url);
+    currentHostname = url.hostname;
+    currentTabUrl = currentTab.url;
+    initializePopup();
+  } catch (e) {
+    console.error('Error parsing URL:', e);
+    const currentSiteLabel = document.getElementById('currentSiteLabel');
+    if (currentSiteLabel) {
+      currentSiteLabel.textContent = 'Unable to detect site';
+    }
+  }
+});
 
+// Initialize popup with current URL
+function initializePopup() {
+  try {
       
-      // Load saved settings
-      chrome.storage.local.get([
+    // Check if extension can run on this page
+    const isRestrictedPage = currentTabUrl.startsWith('chrome://') || 
+                             currentTabUrl.startsWith('chrome-extension://') || 
+                             currentTabUrl.startsWith('moz-extension://') ||
+                             currentTabUrl.startsWith('about:');
+    
+    const siteToggleContainer = document.getElementById('siteToggleContainer');
+    const restrictedPageMessage = document.getElementById('restrictedPageMessage');
+    
+    if (isRestrictedPage) {
+      // Hide site toggle, show message
+      siteToggleContainer.style.display = 'none';
+      restrictedPageMessage.style.display = 'block';
+    } else {
+      // Show site toggle, hide message
+      siteToggleContainer.style.display = 'flex';
+      restrictedPageMessage.style.display = 'none';
+    }
+    
+
+    // Load saved settings
+    chrome.storage.local.get([
         'completionList', 
         'selector',
         'globalSelector',
@@ -245,15 +300,14 @@ chrome.runtime.sendMessage({ action: 'getCurrentUrl' }, (response) => {
         highlightPatternsInTextarea('whitelist', currentTabUrl);
         highlightPatternsInTextarea('blacklist', currentTabUrl);
       });
-    } catch (e) {
-      console.error('Error parsing URL:', e);
-      const currentSiteLabel = document.getElementById('currentSiteLabel');
-      if (currentSiteLabel) {
-        currentSiteLabel.textContent = 'Unable to detect site';
-      }
+  } catch (e) {
+    console.error('Error in initializePopup:', e);
+    const currentSiteLabel = document.getElementById('currentSiteLabel');
+    if (currentSiteLabel) {
+      currentSiteLabel.textContent = 'Unable to detect site';
     }
   }
-});
+}
 
 // Update mode toggle checkbox
 function updateModeToggle(mode) {

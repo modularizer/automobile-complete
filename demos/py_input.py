@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+
+
 from automobile_complete.run.cli import run_input
 
 if __name__ == "__main__":

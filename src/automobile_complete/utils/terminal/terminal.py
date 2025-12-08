@@ -13,6 +13,8 @@ def print_with_suggestion(pre: str = "", post: str="",
                           print=print, # by default, use the print builtin, but allow overriding
                           state: dict | None = global_state, # this is INTENTIONALLY mutable
                           ):
+    post = post or ""
+    pre = pre or ""
     state = state if state is not None else {}
     # first, clear the old content if we are overwriting
     if overwrite and (overwrite_line_count is None or overwrite_line_count > 0):

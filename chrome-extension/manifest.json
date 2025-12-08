@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "description": "Universal autocomplete for any input field",
   "permissions": [
-    "storage"
+    "storage",
+    "tabs"
   ],
   "content_scripts": [
     {

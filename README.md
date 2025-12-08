@@ -73,7 +73,7 @@ This will regenerate wordlists and completion lists with your customizations.
 
 
 ### Console
-Try running [demo.py](demo.py) in your console!
+Try running [demo.py](demos/py_console.py) in your console!
 ```python
 from automobile_complete import Trie
 

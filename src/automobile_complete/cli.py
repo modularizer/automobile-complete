@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """
 Unified CLI for automobile-complete.
 

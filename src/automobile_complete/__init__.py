@@ -19,5 +19,8 @@ from automobile_complete.wordlist import (
     generate_wordfreq_wordlist,
     generate_corpus_wordlist,
     merge_wordlists,
-
+)
+from automobile_complete.run import (
+    main,
+    run_input
 )

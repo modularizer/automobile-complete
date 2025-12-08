@@ -56,7 +56,7 @@ class CoreTrie:
 
     @classmethod
     def from_file(cls, src: str | Path):
-        src = Path(src)
+        src = Path(src).expanduser().resolve()
         return cls.from_words(src.read_text())
 
     @classmethod
@@ -80,6 +80,15 @@ class CoreTrie:
         Example:
             >>> trie = CoreTrie.from_words("anim|als", "enor|mous", "gir|affes")
         """
+
+        # if the user inputs a single line, split on ";"
+        if len(lines) == 1:
+            s = lines[0]
+            non_empty_lines = [x for x in s.splitlines() if x.strip()]
+            if len(non_empty_lines) == 1:
+                non_empty_lines = non_empty_lines[0].split(";")
+            s = "\n".join(non_empty_lines)
+            lines = [s]
         inst = cls(root=root, **config)
         return inst.insert(*lines)
 
