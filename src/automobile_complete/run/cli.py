@@ -68,10 +68,11 @@ def get_char():
 
 def interactive_demo(trie: Trie,
                      noisy: bool = False,
-                     display_stream: Literal["stderr", "stdout", "/dev/tty"] | Any = "/dev/tty",
+                     display_stream: Literal["stderr", "stdout", "/dev/tty", "default"] | Any = "default",
                      placeholder: str = "Start typing to test the auto-complete...",
                      print = print,
                      get_char = get_char,
+                     prompt: str = ""
                      ):
     """
     Run an interactive autocomplete demo.
@@ -87,8 +88,23 @@ def interactive_demo(trie: Trie,
     """
     # Detect if stdout is being piped
     is_piped = not sys.stdout.isatty()
-    display_stream_opened = display_stream == "/dev/tty"
-    display_stream = open('/dev/tty', 'w') if display_stream == "/dev/tty" else sys.stderr if display_stream == "stderr" else sys.stdout if display_stream == "stdout" else display_stream
+    display_stream_opened = False
+    if display_stream == "default":
+        try:
+            display_stream = open('/dev/tty', 'w')
+            display_stream_opened = True
+        except:
+            display_stream= sys.stdout
+    if display_stream == "/dev/tty":
+        display_stream = open('/dev/tty', 'w')
+        display_stream_opened = True
+    elif display_stream == "stderr":
+        display_stream = sys.stderr
+    elif display_stream == "stdout":
+        display_stream = sys.stdout
+    elif isinstance(display_stream, str | Path):
+        display_stream = Path(display_stream).open('w')
+
 
     def log(m="", **kw):
         if noisy:
@@ -108,7 +124,7 @@ def interactive_demo(trie: Trie,
     # Initialize state - start at root
     current_node = trie
     has_typed = False
-    print_with_suggestion("", placeholder, end=CARRIAGE_RETURN, file=display_stream, print=print)
+    print_with_suggestion(prompt, placeholder, end=CARRIAGE_RETURN, file=display_stream, print=print)
 
     recording = ""
     try:
@@ -116,17 +132,15 @@ def interactive_demo(trie: Trie,
             # Get current state from trie (it tracks full_text internally)
             full_text = current_node.full_text or ""
             completion = current_node.completion or ""
-            
-            # Get current prefix for highlighting replacements
-            current_prefix = current_node.prefix or ""
+
 
             # print
             if full_text:
                 # Pass the completion with backspaces (print_with_suggestion will handle display)
                 # and pass the prefix so it can highlight the right characters
-                print_with_suggestion(full_text, completion, prefix=current_prefix, file=display_stream, print = print)
+                print_with_suggestion(prompt + full_text, completion, file=display_stream, print = print)
             elif has_typed:
-                print_with_suggestion("", placeholder, file=display_stream, print = print)
+                print_with_suggestion(prompt, placeholder, file=display_stream, print = print)
 
             # Read a character
             ch = get_char()
@@ -143,7 +157,7 @@ def interactive_demo(trie: Trie,
             if (ch in [CTRL.C, CTRL.D, CTRL.X, CTRL.Q, CTRL["["]]) or ((ch == CARRIAGE_RETURN or ch == '\n') and not current_node.esc):  # Ctrl+D (EOF)
                 current_node.full_text += "\n"
                 full_text += "\n"
-                print_with_suggestion(full_text, "", file=display_stream, print = print)
+                print_with_suggestion(prompt + full_text, "", file=display_stream, print = print)
                 log("\n\nExiting...")
                 break
             elif ch == TAB:  # Tab - accept completion
@@ -190,6 +204,50 @@ def interactive_demo(trie: Trie,
 
 
 
+def run_input(
+        prompt: str = "",
+        *,
+        completions: str = "",
+        completion_files: list | None = None,
+        noisy: bool | None = None,
+        placeholder: str | None = None,
+        print = print,
+):
+    if noisy is None:
+        noisy = env.get_as("AMC_RUN_NOISY", bool, False)
+    # Check env var for --placeholder if not set via CLI
+    if placeholder is None:
+        # Re-check in case .env was loaded
+        placeholder = env.get_as("AMC_RUN_PLACEHOLDER", str, "Start typing to test the auto-complete...")
+
+    # Load trie from completion file(s)
+    # Re-check defaults (env object already loaded everything)
+    default_completion_file = env.get_as("AMC_SRC", "path_str")
+    completion_files = completion_files if completion_files is not None else ([default_completion_file] if default_completion_file else [])
+
+    # Detect if stdout is being piped
+    is_piped = not sys.stdout.isatty()
+    # When piped, send noisy messages to stderr
+    noisy_stream = sys.stderr if is_piped else sys.stdout
+
+    if noisy:
+        print(f"Loading trie from {len(completion_files)} file(s): {', '.join(completion_files)}", file=noisy_stream)
+    t0 = time.perf_counter()
+    # Load all files and concatenate their content (expand ~ in paths)
+    all_lines = []
+    for completion_file in (completion_files or []):
+        file_path = Path(completion_file).expanduser()
+        if not file_path.exists():
+            raise FileNotFoundError(f"Completion file not found: {completion_file}")
+        all_lines.append(file_path.read_text())
+
+    # Create trie from all concatenated content
+    trie = Trie.from_words("\n".join([completions, *all_lines]))
+    t1 = time.perf_counter()
+    if noisy:
+        print(f"Loaded trie with {len(trie.root.words)} words in {(t1 - t0):.3f}s\n", file=noisy_stream)
+    return interactive_demo(trie, noisy=noisy, placeholder=placeholder, prompt=prompt)
+
 
 def main():
     """
@@ -201,17 +259,6 @@ def main():
     parser = argparse.ArgumentParser(
         description="Interactive autocomplete demo with inline gray text suggestions",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Run with out.txt
-  python interactive_demo.py
-
-  # Run with custom word file
-  python interactive_demo.py out.txt
-
-  # Run with verbose output
-  python interactive_demo.py out.txt --noisy
-        """
     )
     
     # Environment variables are automatically loaded by env object
@@ -230,7 +277,6 @@ Examples:
         action="store_true",
         help=f"Enable verbose output (show loading messages, etc.). Default from .env.sample: {env.get_as('AMC_RUN_NOISY', bool, False) or 'false'}"
     )
-    
     default_placeholder = env.get_as("AMC_RUN_PLACEHOLDER", str, "Start typing to test the auto-complete...")
     parser.add_argument(
         "--placeholder",
@@ -248,43 +294,12 @@ Examples:
     
     args = parser.parse_args()
     
-    # Detect if stdout is being piped
-    is_piped = not sys.stdout.isatty()
-    # When piped, send noisy messages to stderr
-    noisy_stream = sys.stderr if is_piped else sys.stdout
-    
-    # Load trie from completion file(s)
-    # Re-check defaults (env object already loaded everything)
-    default_completion_file = env.get_as("AMC_SRC", "path_str")
-    completion_files = args.completion_files if args.completion_files else ([default_completion_file] if default_completion_file else [])
-    
-    # Check env var for --noisy if flag not set
-    if not args.noisy:
-        args.noisy = env.get_as("AMC_RUN_NOISY", bool, False)
-    
-    # Check env var for --placeholder if not set via CLI
-    if args.placeholder == default_placeholder:
-        # Re-check in case .env was loaded
-        args.placeholder = env.get_as("AMC_RUN_PLACEHOLDER", str, "Start typing to test the auto-complete...")
-    
-    if args.noisy:
-        print(f"Loading trie from {len(completion_files)} file(s): {', '.join(completion_files)}", file=noisy_stream)
 
-    t0 = time.perf_counter()
-    # Load all files and concatenate their content (expand ~ in paths)
-    all_lines = []
-    for completion_file in completion_files:
-        file_path = Path(completion_file).expanduser()
-        if not file_path.exists():
-            parser.error(f"Completion file not found: {completion_file}")
-        all_lines.append(file_path.read_text())
-    
-    # Create trie from all concatenated content
-    trie = Trie.from_words("\n".join(all_lines))
-    t1 = time.perf_counter()
-    if args.noisy:
-        print(f"Loaded trie with {len(trie.root.words)} words in {(t1 - t0):.3f}s\n", file=noisy_stream)
-    interactive_demo(trie, noisy=args.noisy, placeholder=args.placeholder)
+    return run_input(
+        noisy=args.noisy,
+        placeholder=args.placeholder,
+        completion_files=args.completion_files
+    )
 
 
 

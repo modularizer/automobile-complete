@@ -23,3 +23,8 @@
 - [ ] explore just doing the standard trie auto-complete instead of the hardcoded, or maybe a combo
   - [ ] hardcoding the results is nice how simple, deterministic, and transparent it is
   - [ ]  hardcoding doesn't scale well to bigrams and beyone
+
+
+xbindkeys
+input-leap
+evdev

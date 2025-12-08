@@ -12,7 +12,6 @@ def print_with_suggestion(pre: str = "", post: str="",
                           file=sys.stdout, end="", # kwargs to pass to print
                           print=print, # by default, use the print builtin, but allow overriding
                           state: dict | None = global_state, # this is INTENTIONALLY mutable
-                          prefix: str | None = None, # Current prefix (for highlighting replacements)
                           ):
     state = state if state is not None else {}
     # first, clear the old content if we are overwriting
@@ -30,51 +29,23 @@ def print_with_suggestion(pre: str = "", post: str="",
 
     # Check if completion starts with backspaces (full replacement)
     backspace_count = 0
-    display_post = post
     if post.startswith(BACKSPACE):
         # Count leading backspaces
         while backspace_count < len(post) and post[backspace_count] == BACKSPACE:
             backspace_count += 1
-        # Remove backspaces from completion for display
-        display_post = post[backspace_count:]
-    
-    # For full replacements, highlight the characters that will be replaced
-    if backspace_count > 0 and prefix is not None and len(prefix) >= backspace_count:
-        # The prefix is what will be replaced (or part of it)
-        # Split prefix into: part that stays, and part that will be replaced
-        prefix_stays = prefix[:-backspace_count] if backspace_count > 0 else ""
-        prefix_replaced = prefix[-backspace_count:] if backspace_count > 0 else prefix
-        
-        # Calculate the part of pre that's before the prefix
-        prefix_start = len(pre) - len(prefix) if len(pre) >= len(prefix) else 0
-        pre_before_prefix = pre[:prefix_start]
-        
-        # Show replaced part of prefix with gray background highlight
-        replaced_highlight = colors.bg.white(prefix_replaced)
-        # Show the part of prefix that stays (if any) normally
-        prefix_before_replaced = prefix_stays
-        # Show replacement text in gray
-        replacement_text = cursor.write_ahead(colors.gray(display_post))
-        
-        t = f"{pre_before_prefix}{prefix_before_replaced}{replaced_highlight}{replacement_text}{end}"
-    elif backspace_count > 0:
-        # Fallback: if no prefix provided, just highlight last N characters
-        if len(pre) >= backspace_count:
-            pre_stays = pre[:-backspace_count]
-            pre_replaced = pre[-backspace_count:]
-            replaced_highlight = colors.bg.white(pre_replaced)
-            replacement_text = cursor.write_ahead(colors.gray(display_post))
-            t = f"{pre_stays}{replaced_highlight}{replacement_text}{end}"
-        else:
-            # Not enough characters to replace, just show completion
-            completion = cursor.write_ahead(colors.gray(display_post))
-            t = f"{pre}{completion}{end}"
-    else:
-        # Normal completion: make grey completion text
-        completion = cursor.write_ahead(colors.gray(display_post))
-        t = f"{pre}{completion}{end}"
-    
-    print(t, end="", flush=True, file=file)
+    post = post[backspace_count:]
+    backspace_count = min(len(pre), backspace_count)
+    prefix_stays = pre[:-backspace_count] if backspace_count > 0 else pre
+    prefix_replaced = pre[-backspace_count:] if backspace_count > 0 else ""
+    replaced_highlight = colors.bg.white(prefix_replaced) if prefix_replaced else ""
+    completion = cursor.write_ahead(colors.gray(post)) if post else ""
+
+    before_cursor = f"{prefix_stays}{replaced_highlight}"
+    if before_cursor:
+        print(before_cursor, end="", flush=True, file=file)
+    if completion:
+        print(completion, end="", flush=True, file=file)
+    t = before_cursor + completion
     state["old"] = t
 
 if __name__ == "__main__":
