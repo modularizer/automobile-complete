@@ -40,11 +40,9 @@ dev = [
 
 [project.scripts]
 amc = "automobile_complete.cli:main"
-amc-validate-env = "automobile_complete.utils.validate_env:main"
-amcc = "automobile_complete.completionlist.cli:main"
-amcmc = "automobile_complete.completionlist.merge.cli:main"
-amcw = "automobile_complete.wordlist.write.cli:main"
-amcmw = "automobile_complete.wordlist.merge.cli:main"
+amc-run = "automobile_complete.run.cli:main"
+amc-build = "automobile_complete.cli:build_main"
+amc-merge = "automobile_complete.cli:merge_main"
 
 [project.urls]
 Homepage = "https://github.com/modularizer/automobile-complete"

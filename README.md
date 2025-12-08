@@ -2,22 +2,39 @@
 
 ![demo.gif](docs/demo.gif)
 
-Build your own **fast and dumb** offline autocomplete from a hardcoded wordlist.
+Build your own **fast and dumb** synchronous offline autocomplete from a hardcoded wordlist or a personal dictionary.
 
-1. Use our prebuilt word frequency list pulled from https://github.com/rspeer/wordfreq
-2. Parse into a simple text format
-3. Hardcode your own completions
-```commandline
-gir|affes
-giraffes a|re super tall
-```
-4. run!
+a. Use the autocomplete as a developer to...
+    - add it to bash scripts to prompt for input
+    - use it in any Typescript/Javascript based app
+    - use it on any HTML page you make
+b. Use the autocomplete as a user by ...
+    - enabling the Chrome extension to get autocomplete with your personal dictionary on any input in any website
+    - (Coming Soon) Overwrite your terminal so you can use it in most script you run
+    - (Coming Soon) Get "headless" competions and replacements by typing to keybindings
 
-Currently available in Python, Typescript/Javascript/React Native/React Native Web.
-Best used as a Chrome Extension.
+## How it works
+1. (optional) Build to customize
+   - by default we use a word frequency list pulled from https://github.com/rspeer/wordfreq
+   - word frequencies get parsed into a simple text format
+   - one or more word frequency list get built into a pre-solved autocomplete tree using your params
+     - e.g. make completions where we are 50% sure we know the word being typed
+   - the built completions can be extended with completions you want
+        ```commandline
+        gir|affes
+        giraffes a|re super tall
+        ```
+   - we support replacements to
+        ```commandline
+        favorite animal||giraffe
+        qq||giraffe
+        ```
+2. Run
+   - use python cli `amc` command
+   - enable it in your browser as a chrome extension
+   - embed in your JS app or bash script
 
 ## Quick Start
-
 ### Installation
 
 ```bash
@@ -32,6 +49,8 @@ pip install -e .
 cd react-native-engine
 npm install
 npm run build
+
+cd ..
 ```
 
 ### Basic Usage
@@ -45,7 +64,7 @@ I will publish to Chrome Web Store soon, in the meantime...
 
 1. Go to chrome://extensions
 2. Enable Developer mode
-3. Load Unpacked `chrome-extension` folder
+3. Load Unpacked `dist/chrome-extension` folder
 4. go to your favorite webpage and start typing
 
 ### How to use
@@ -60,10 +79,10 @@ The project ships with pre-generated wordlists and completion lists, so you can 
 ### How to customize
 **Only run setup if you've customized something:**
 ```bash
-amc setup
+amc build
 ```
 
-Run `amc setup` if you've:
+Run `amc build` if you've:
 - Modified `.env` settings
 - Added custom wordlists (e.g., `custom-words*.txt`)
 - Added custom completion lists (e.g., `custom-completions*.txt`)
@@ -121,7 +140,7 @@ another_word #50
 special_term
 ```
 
-The `amc setup` command will automatically merge your custom words with the generated wordlist.
+The `amc build` command will automatically merge your custom words with the generated wordlist.
 
 #### Adding Custom Completions
 
@@ -133,7 +152,7 @@ wor|ld #20
 foo|bar #5
 ```
 
-The `amc setup` command will automatically merge your custom completions with the generated completion list.
+The `amc build` command will automatically merge your custom completions with the generated completion list.
 
 #### Configuration via `.env`
 
@@ -162,28 +181,21 @@ If you need more control, you can run the steps individually:
 
 ```bash
 # Generate wordlist
-amc w
+amc build words
 
 # Merge wordlists (automatically includes custom-words*.txt)
-amc mw
+amc merge words
 
 # Generate completion list
-amc c
+amc build completions
 
 # Merge completion lists (automatically includes custom-completions*.txt)
-amc mc
+amc merge completions
 
 # Run interactive autocomplete
 amc
 ```
 
-### Command Aliases
-
-- `amc w` or `amcw` - Generate wordlist
-- `amc mw` or `amcmw` - Merge wordlists
-- `amc c` or `amcc` - Generate completion list
-- `amc mc` or `amcmc` - Merge completion lists
-- `amc` - Interactive autocomplete
 
 ### File Formats
 

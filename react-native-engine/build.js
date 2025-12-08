@@ -84,7 +84,12 @@ esbuild
         console.log(`   📦 Copied to: ${extensionDest}`);
         
         // Create zip file of the chrome extension
-        const zipPath = path.join(__dirname, '..', 'chrome-extension.zip');
+        const dist = path.join(__dirname, '..', 'dist')
+          if (!fs.existsSync(dist)) {
+              fs.mkdirSync(dist);
+          }
+
+        const zipPath = path.join(dist, 'chrome-extension.zip');
         await zipDirectory(extensionDir, zipPath);
         console.log(`   📦 Zipped extension to: ${zipPath}`);
       } catch (error) {
