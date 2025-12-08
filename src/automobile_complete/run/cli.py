@@ -238,7 +238,7 @@ def run_input(
     for completion_file in (completion_files or []):
         file_path = Path(completion_file).expanduser()
         if not file_path.exists():
-            raise FileNotFoundError(f"Completion file not found: {completion_file}")
+            continue
         all_lines.append(file_path.read_text())
 
     # Create trie from all concatenated content
@@ -255,15 +255,62 @@ def main():
     
     Parses command-line arguments and runs the interactive demo with
     either a custom word file or the default demo trie.
+    
+    Usage:
+        amc run [prompt] [completion_files...] [options]
+        
+    Examples:
+        # Run with default settings
+        amc run
+        
+        # Run with a prompt
+        amc run "Enter your name: "
+        
+        # Run with prompt and completion files
+        amc run "Enter command: " completions1.txt completions2.txt
+        
+        # Run with inline completions (semicolon-separated)
+        amc run "Enter: " --completions "hel|lo;wor|ld;foo|bar"
+        
+        # Run with options
+        amc run "Prompt: " --noisy --placeholder "Type here..."
     """
     parser = argparse.ArgumentParser(
         description="Interactive autocomplete demo with inline gray text suggestions",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run with default settings
+  amc run
+  
+  # Run with a prompt
+  amc run "Enter your name: "
+  
+  # Run with prompt and completion files
+  amc run "Enter command: " completions1.txt completions2.txt
+  
+  # Run with inline completions (semicolon-separated)
+  amc run "Enter: " --completions "hel|lo;wor|ld;foo|bar"
+  
+  # Run with options
+  amc run "Prompt: " --noisy --placeholder "Type here..."
+        """
     )
     
     # Environment variables are automatically loaded by env object
     
     default_completion_file = env.get_as("AMC_SRC", "path_str")
+    
+    # First positional: prompt (optional)
+    parser.add_argument(
+        "prompt",
+        type=str,
+        nargs="?",
+        default="",
+        help="Prompt string to display before input (optional). Default: empty string"
+    )
+    
+    # Remaining positionals: completion files
     parser.add_argument(
         "completion_files",
         type=str,
@@ -286,6 +333,13 @@ def main():
     )
     
     parser.add_argument(
+        "--completions",
+        type=str,
+        default="",
+        help="Semicolon-separated completions to add (e.g., 'hel|lo;wor|ld'). Semicolons are converted to newlines."
+    )
+    
+    parser.add_argument(
         "--env-file",
         type=str,
         default=None,
@@ -294,11 +348,19 @@ def main():
     
     args = parser.parse_args()
     
+    # Use prompt as placeholder if no explicit placeholder and prompt is provided
+    if args.placeholder == default_placeholder and args.prompt:
+        args.placeholder = args.prompt
+    
+    # Convert semicolon-separated completions to newline-separated
+    completions = args.completions.replace(";", "\n") if args.completions else ""
 
     return run_input(
+        prompt=args.prompt,
         noisy=args.noisy,
         placeholder=args.placeholder,
-        completion_files=args.completion_files
+        completions=completions,
+        completion_files=args.completion_files if args.completion_files else None
     )
 
 
