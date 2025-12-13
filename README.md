@@ -13,6 +13,8 @@ b. Use the autocomplete as a user by ...
     - (Coming Soon) Overwrite your terminal so you can use it in most script you run
     - (Coming Soon) Get "headless" competions and replacements by typing to keybindings
 
+Now available as a Chrome Extension on the Chrome Web Store: [https://chromewebstore.google.com/detail/automobile-complete/](https://chromewebstore.google.com/detail/automobile-complete/ceedfpgnapppfofdppklnigljcojkicf)
+
 ## How it works
 1. (optional) Build to customize
    - by default we use a word frequency list pulled from https://github.com/rspeer/wordfreq
