@@ -4,11 +4,11 @@
 
 Build your own **fast and dumb** synchronous offline autocomplete from a hardcoded wordlist or a personal dictionary.
 
-a. Use the autocomplete as a developer to...
+- a. Use the autocomplete as a developer to...
     - add it to bash scripts to prompt for input
     - use it in any Typescript/Javascript based app
     - use it on any HTML page you make
-b. Use the autocomplete as a user by ...
+- b. Use the autocomplete as a user by ...
     - enabling the Chrome extension to get autocomplete with your personal dictionary on any input in any website
     - (Coming Soon) Overwrite your terminal so you can use it in most script you run
     - (Coming Soon) Get "headless" competions and replacements by typing to keybindings
